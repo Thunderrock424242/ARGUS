@@ -1,0 +1,7 @@
+import { DemoBanner, MetricCard, PageHeader } from "@/components/domain/argus-ui";
+import { WatchlistConsole } from "@/components/pages/watchlist-console";
+import { demoEvents, demoWatchlists } from "@/packages/shared/demo-data";
+
+export default function WatchlistsPage() {
+  return <main className="route-page page-stack space-y-5 p-4 sm:p-6 xl:p-8"><DemoBanner /><PageHeader eyebrow="Persistent monitoring / 05" title="Watchlists" description="Track places, organizations, entities, vulnerabilities, keywords, event categories, and geographic areas with explicit matching and notification rules." /><section className="metric-grid grid gap-3 sm:grid-cols-2 xl:grid-cols-4"><MetricCard label="Active watchlists" value={demoWatchlists.filter((entry) => entry.enabled).length} detail={`${demoWatchlists.length} configured`} tone="green" /><MetricCard label="Critical monitors" value={demoWatchlists.filter((entry) => entry.priority === "critical").length} detail="Immediate in-app notifications" tone="red" /><MetricCard label="Event matches" value={demoWatchlists.reduce((sum, entry) => sum + entry.matchCount, 0)} detail="Across current snapshot" /><MetricCard label="Unreviewed alerts" value={demoEvents.filter((event) => event.watchlistIds.length && event.reviewRequired).length} detail="Routed to analyst queue" tone="amber" /></section><WatchlistConsole initialWatchlists={demoWatchlists} events={demoEvents} /></main>;
+}
