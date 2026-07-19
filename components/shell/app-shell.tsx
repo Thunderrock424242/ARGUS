@@ -68,6 +68,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const [now, setNow] = useState<Date | null>(null);
 
   useEffect(() => {
+    document.documentElement.dataset.argusHydrated = "true";
     const stored = window.localStorage.getItem("argus-nav-collapsed");
     const initialFrame = window.requestAnimationFrame(() => {
       if (stored) setCollapsed(stored === "true");
@@ -77,6 +78,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     return () => {
       window.cancelAnimationFrame(initialFrame);
       window.clearInterval(timer);
+      delete document.documentElement.dataset.argusHydrated;
     };
   }, []);
 

@@ -1,7 +1,13 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
+
+async function gotoArgus(page: Page, path: string) {
+  const response = await page.goto(path);
+  await page.locator("html[data-argus-hydrated='true']").waitFor();
+  return response;
+}
 
 test("command center exposes the operating picture and demonstration warning", async ({ page }) => {
-  await page.goto("/");
+  await gotoArgus(page, "/");
   await expect(page.getByRole("heading", { name: "Command Center" })).toBeVisible();
   await expect(page.getByText("Demonstration data — not real-world intelligence.").first()).toBeVisible();
   await expect(page.getByRole("heading", { name: "Global situation overview" })).toBeVisible();
@@ -10,7 +16,7 @@ test("command center exposes the operating picture and demonstration warning", a
 });
 
 test("events can be searched and opened as a dossier", async ({ page }) => {
-  await page.goto("/events");
+  await gotoArgus(page, "/events");
   const search = page.getByPlaceholder("Search events, locations, tags…");
   await search.fill("Helios municipal");
   const eventLink = page.getByRole("link", { name: "[DEMO] Helios municipal network isolates affected services", exact: true });
@@ -23,7 +29,7 @@ test("events can be searched and opened as a dossier", async ({ page }) => {
 });
 
 test("global search opens a matching intelligence record", async ({ page }) => {
-  await page.goto("/");
+  await gotoArgus(page, "/");
   await page.keyboard.press("Control+k");
   const search = page.getByRole("textbox", { name: "Search ARGUS" });
   await expect(search).toBeVisible();
@@ -36,7 +42,7 @@ test("global search opens a matching intelligence record", async ({ page }) => {
 });
 
 test("review decisions update the local demonstration queue", async ({ page }) => {
-  await page.goto("/review");
+  await gotoArgus(page, "/review");
   await expect(page.getByRole("heading", { name: "Review Queue" })).toBeVisible();
   const confirm = page.getByRole("button", { name: "C Confirm" });
   await expect(confirm).toBeVisible();
@@ -46,7 +52,7 @@ test("review decisions update the local demonstration queue", async ({ page }) =
 
 test("all primary analyst routes remain reachable", async ({ page }) => {
   for (const route of ["/map", "/sources", "/watchlists", "/briefs", "/aether", "/system", "/settings"]) {
-    const response = await page.goto(route);
+    const response = await gotoArgus(page, route);
     expect(response?.status(), route).toBe(200);
     await expect(page.getByText(/Demonstration data — not real-world intelligence/).first()).toBeVisible();
   }
