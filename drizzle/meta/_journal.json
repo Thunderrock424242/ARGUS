@@ -8,6 +8,27 @@
       "when": 1784449336624,
       "tag": "0000_normal_klaw",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1784481056656,
+      "tag": "0001_moaning_power_man",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1784491767251,
+      "tag": "0002_ambiguous_spot",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1784491924939,
+      "tag": "0003_solid_phil_sheldon",
+      "breakpoints": true
     }
   ]
 }

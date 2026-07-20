@@ -3,20 +3,19 @@ import { fileURLToPath } from "node:url";
 
 const host = "127.0.0.1";
 const port = process.env.ARGUS_E2E_PORT ?? "3100";
-const healthUrl = `http://${host}:${port}/api/health`;
+const healthUrl = `http://${host}:${port}/`;
 const outputLimit = 16_384;
 let serverOutput = "";
 
 const server = spawn(
   process.execPath,
   [
-    "./node_modules/next/dist/bin/next",
-    "dev",
-    "--webpack",
-    "-H",
+    "./node_modules/vite/bin/vite.js",
+    "--host",
     host,
-    "-p",
+    "--port",
     port,
+    "--strictPort",
   ],
   {
     cwd: process.cwd(),
@@ -41,7 +40,7 @@ async function waitForServer() {
       const response = await fetch(healthUrl, { signal: AbortSignal.timeout(1_000) });
       if (response.ok) return;
     } catch {
-      // The production worker is still starting.
+      // The Vite development server is still starting.
     }
     await new Promise((resolve) => setTimeout(resolve, 250));
   }

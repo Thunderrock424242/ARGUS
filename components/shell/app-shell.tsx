@@ -5,16 +5,22 @@ import {
   Bell,
   BookOpenText,
   Bot,
+  Camera,
   ChevronLeft,
   ChevronRight,
   CircleUserRound,
   Command,
   FileSearch,
   FileText,
+  Gauge,
+  GitBranch,
   Globe2,
+  History,
   ListChecks,
   Map,
   Menu,
+  Network,
+  PanelsTopLeft,
   RadioTower,
   Search,
   Settings2,
@@ -22,16 +28,24 @@ import {
   Star,
   X,
 } from "lucide-react";
-import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import Link from "@/components/navigation/link";
+import { usePathname, useRouter } from "@/lib/client/navigation";
 import { FormEvent, ReactNode, useEffect, useMemo, useState } from "react";
 import { demoEvents, demoSources } from "@/packages/shared/demo-data";
 import { BrandMark } from "./brand-mark";
 
 const navigation = [
-  { href: "/", label: "Command Center", icon: Activity },
+  { href: "/", label: "Global Operations", icon: Activity },
+  { href: "/dashboard", label: "Command Center", icon: Gauge },
   { href: "/map", label: "Global Map", icon: Map },
   { href: "/events", label: "Events", icon: Globe2 },
+  { href: "/relationships", label: "Relationships", icon: Network },
+  { href: "/consequences", label: "Consequences", icon: GitBranch, count: 9 },
+  { href: "/conflicts", label: "Conflict Profiles", icon: ShieldCheck },
+  { href: "/timeline", label: "Timeline", icon: History },
+  { href: "/alerts", label: "Alerts", icon: Bell, count: 4 },
+  { href: "/live-feeds", label: "Live Feeds", icon: Camera },
+  { href: "/wall", label: "Monitoring Wall", icon: PanelsTopLeft },
   { href: "/briefs", label: "Intelligence Briefs", icon: BookOpenText },
   { href: "/watchlists", label: "Watchlists", icon: Star },
   { href: "/sources", label: "Sources", icon: RadioTower },

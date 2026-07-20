@@ -1674,7 +1674,10 @@ export function getTimelineForEvent(eventId: string): EventTimelineEntry[] {
     .sort((a, b) => a.occurredAt.localeCompare(b.occurredAt));
 }
 
-export const demoDataProvider: IntelligenceDataProvider = {
+export const demoDataProvider: Pick<
+  IntelligenceDataProvider,
+  "getEvents" | "getEventBySlug" | "getReports" | "getBriefs" | "getWatchlists" | "getSources"
+> = {
   async getEvents() {
     return demoEvents;
   },

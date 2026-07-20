@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import Link from "@/components/navigation/link";
 import { useDeferredValue, useMemo, useState } from "react";
 import type { IntelligenceEvent } from "@/packages/shared/types";
 import { ConfidenceMeter, SeverityMark, StatusBadge, controlClass, formatDate, titleCase } from "@/components/domain/argus-ui";

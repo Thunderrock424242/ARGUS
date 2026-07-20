@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Link from "@/components/navigation/link";
 import type { ReactNode } from "react";
 
 export const panelClass =
@@ -22,7 +22,7 @@ export function DemoBanner({ compact = false }: { compact?: boolean }) {
       <span className="mt-0.5 h-2 w-2 shrink-0 rounded-full bg-amber-300 shadow-[0_0_12px_rgba(252,211,77,.65)]" />
       <div>
         <strong className="block text-[11px] font-bold uppercase tracking-[.18em] text-amber-200">
-          Demonstration data — not real-world intelligence
+          Demonstration data — not real-world intelligence.
         </strong>
         {!compact && (
           <p className="mt-1 text-xs leading-5 text-amber-100/65">

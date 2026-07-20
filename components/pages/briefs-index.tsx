@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import Link from "@/components/navigation/link";
 import { useMemo, useState } from "react";
 import type { IntelligenceBrief } from "@/packages/shared/types";
 import { StatusBadge, buttonClass, controlClass, formatDate, titleCase } from "@/components/domain/argus-ui";

@@ -74,19 +74,21 @@ export interface CreateAuditEntryInput {
   after?: unknown;
   reason?: string;
   occurredAt?: string;
+  actorType?: AuditLogEntry["actorType"];
 }
 
-function actorIdentifier(name: string): string {
-  return `analyst:${name.trim().toLocaleLowerCase("en-US").replace(/[^a-z0-9]+/g, "-").slice(0, 64)}`;
+function actorIdentifier(name: string, actorType: AuditLogEntry["actorType"]): string {
+  return `${actorType}:${name.trim().toLocaleLowerCase("en-US").replace(/[^a-z0-9]+/g, "-").slice(0, 64)}`;
 }
 
 export function createAuditEntry(input: CreateAuditEntryInput): AuditLogEntry {
+  const actorType = input.actorType ?? "analyst";
   return {
     id: `audit-${crypto.randomUUID()}`,
     occurredAt: input.occurredAt ?? new Date().toISOString(),
-    actorId: actorIdentifier(input.actorName),
+    actorId: actorIdentifier(input.actorName, actorType),
     actorName: input.actorName,
-    actorType: "analyst",
+    actorType,
     action: input.action,
     targetType: input.targetType,
     targetId: input.targetId,

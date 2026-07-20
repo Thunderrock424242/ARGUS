@@ -1,12 +1,16 @@
 "use client";
 
-import Link from "next/link";
+import Link from "@/components/navigation/link";
+import { useSearchParams } from "@/lib/client/navigation";
 import { useMemo, useState } from "react";
-import type { IntelligenceEvent, IntelligenceSource, SourceReport } from "@/packages/shared/types";
+import type { AetherResponse, IntelligenceEvent, IntelligenceSource, SourceReport } from "@/packages/shared/types";
 import { ConfidenceMeter, StatusBadge, buttonClass, controlClass, formatDate, primaryButtonClass, titleCase } from "@/components/domain/argus-ui";
 
 type Mode = "chat" | "event-context" | "source-comparison" | "brief-generation" | "contradiction-analysis";
 type ChatMessage = { id: string; role: "analyst" | "aether"; text: string; eventId?: string; reportIds?: string[] };
+type AetherApiPayload = { data?: AetherResponse; error?: { message?: string } };
+
+const brainApiUrl = import.meta.env.VITE_ARGUS_API_URL?.replace(/\/+$/, "") ?? "";
 
 const modes: { id: Mode; label: string; description: string }[] = [
   { id: "chat", label: "General analysis", description: "Query stored ARGUS evidence" },
@@ -25,12 +29,19 @@ const suggestions: Record<Mode, string[]> = {
 };
 
 export function AetherConsole({ events, reports, sources, initialEventSlug, initialMode }: { events: IntelligenceEvent[]; reports: SourceReport[]; sources: IntelligenceSource[]; initialEventSlug?: string; initialMode?: string }) {
-  const validMode = modes.some((mode) => mode.id === initialMode) ? initialMode as Mode : initialEventSlug ? "event-context" : "chat";
+  const searchParams = useSearchParams();
+  const eventSlug = initialEventSlug ?? searchParams.get("event") ?? undefined;
+  const requestedMode = initialMode ?? searchParams.get("mode") ?? undefined;
+  const validMode = modes.some((mode) => mode.id === requestedMode) ? requestedMode as Mode : eventSlug ? "event-context" : "chat";
   const [mode, setMode] = useState<Mode>(validMode);
-  const [eventId, setEventId] = useState(events.find((event) => event.slug === initialEventSlug)?.id ?? events[0]?.id ?? "");
+  const [eventId, setEventId] = useState(events.find((event) => event.slug === eventSlug)?.id ?? events[0]?.id ?? "");
   const [prompt, setPrompt] = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>([{ id: "welcome", role: "aether", text: "I’m Aether, the ARGUS analysis layer. I can reason only across this stored demonstration dataset. Choose an event or ask a suggested question; every evidence reference will resolve to an existing source report.", eventId }]);
   const [activeMessageId, setActiveMessageId] = useState("welcome");
+  const [isThinking, setIsThinking] = useState(false);
+  const [brainStatus, setBrainStatus] = useState(
+    brainApiUrl ? "Remote ARGUS brain configured." : "Using the bundled demonstration brain.",
+  );
 
   const selectedEvent = events.find((event) => event.id === eventId) ?? events[0];
   const eventReports = useMemo(() => reports.filter((report) => selectedEvent && (report.eventId === selectedEvent.id || selectedEvent.sourceReportIds.includes(report.id))), [reports, selectedEvent]);
@@ -66,15 +77,56 @@ export function AetherConsole({ events, reports, sources, initialEventSlug, init
     return { id, role: "aether", text, eventId: current.id, reportIds: citations };
   }
 
-  function ask(question = prompt) {
+  async function generateRemoteResponse(question: string, id: string): Promise<ChatMessage | null> {
+    if (!brainApiUrl) return null;
+    const response = await fetch(`${brainApiUrl}/api/aether`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        prompt: question,
+        contextEventIds: selectedEvent ? [selectedEvent.id] : [],
+      }),
+    });
+    const payload = (await response.json()) as AetherApiPayload;
+    if (!response.ok || !payload.data) {
+      throw new Error(payload.error?.message ?? "The remote ARGUS brain is unavailable.");
+    }
+    return {
+      id,
+      role: "aether",
+      text: payload.data.answer,
+      eventId: payload.data.relatedEventIds[0],
+      reportIds: payload.data.citations.map((citation) => citation.reportId),
+    };
+  }
+
+  async function ask(question = prompt) {
     const clean = question.trim();
-    if (!clean) return;
+    if (!clean || isThinking) return;
     const ordinal = messages.length;
     const analyst: ChatMessage = { id: `analyst-${ordinal}`, role: "analyst", text: clean, eventId };
-    const response = generateResponse(clean, `aether-${ordinal + 1}`);
-    setMessages((current) => [...current, analyst, response]);
-    setActiveMessageId(response.id);
+    const responseId = `aether-${ordinal + 1}`;
+    setMessages((current) => [...current, analyst]);
     setPrompt("");
+    setIsThinking(true);
+    let response: ChatMessage;
+    try {
+      response =
+        (await generateRemoteResponse(clean, responseId)) ??
+        generateResponse(clean, responseId);
+      setBrainStatus(
+        brainApiUrl
+          ? "Connected to the remote ARGUS brain."
+          : "Using the bundled demonstration brain.",
+      );
+    } catch {
+      response = generateResponse(clean, responseId);
+      setBrainStatus("Remote brain unavailable; used the bundled safe fallback.");
+    } finally {
+      setIsThinking(false);
+    }
+    setMessages((current) => [...current, response]);
+    setActiveMessageId(response.id);
   }
 
   return (
@@ -84,13 +136,13 @@ export function AetherConsole({ events, reports, sources, initialEventSlug, init
         <p className="mb-2 px-2 text-[9px] font-bold uppercase tracking-[.16em] text-slate-600">Analysis mode</p>
         <div className="grid gap-1 sm:grid-cols-2 xl:grid-cols-1">{modes.map((item) => <button key={item.id} type="button" className={`rounded-md px-3 py-3 text-left transition ${mode === item.id ? "bg-violet-300/[.08] shadow-[inset_3px_0_0_rgba(196,181,253,.65)]" : "hover:bg-white/[.03]"}`} onClick={() => setMode(item.id)}><span className={`block text-xs font-semibold ${mode === item.id ? "text-violet-100" : "text-slate-400"}`}>{item.label}</span><span className="mt-1 block text-[9px] leading-4 text-slate-600">{item.description}</span></button>)}</div>
         <label className="mt-5 block border-t border-white/[.06] px-2 pt-4"><span className="mb-2 block text-[9px] font-bold uppercase tracking-[.15em] text-slate-600">Event context</span><select className={`${controlClass} w-full text-xs`} value={eventId} onChange={(event) => setEventId(event.target.value)}>{events.map((event) => <option key={event.id} value={event.id}>{event.title}</option>)}</select></label>
-        <div className="mt-5 px-2"><p className="text-[9px] font-bold uppercase tracking-[.15em] text-slate-600">Suggested questions</p><div className="mt-2 space-y-1">{suggestions[mode].map((question) => <button key={question} type="button" className="block min-h-9 w-full rounded px-2 text-left text-[10px] leading-4 text-slate-500 transition hover:bg-white/[.035] hover:text-cyan-200" onClick={() => ask(question)}>{question}</button>)}</div></div>
+        <div className="mt-5 px-2"><p className="text-[9px] font-bold uppercase tracking-[.15em] text-slate-600">Suggested questions</p><div className="mt-2 space-y-1">{suggestions[mode].map((question) => <button key={question} type="button" className="block min-h-9 w-full rounded px-2 text-left text-[10px] leading-4 text-slate-500 transition hover:bg-white/[.035] hover:text-cyan-200 disabled:cursor-wait disabled:opacity-50" disabled={isThinking} onClick={() => void ask(question)}>{question}</button>)}</div></div>
       </aside>
 
       <div className="flex min-w-0 flex-col">
         <header className="flex min-h-16 flex-wrap items-center justify-between gap-3 border-b border-white/[.08] px-5 py-3"><div><p className="text-[9px] uppercase tracking-[.14em] text-slate-600">Active context</p><p className="mt-1 max-w-xl truncate text-xs font-semibold text-slate-200">{selectedEvent?.title ?? "No event selected"}</p></div><div className="flex items-center gap-2"><StatusBadge tone="violet">AI-generated</StatusBadge><StatusBadge tone="green">Local evidence only</StatusBadge></div></header>
         <div className="flex-1 space-y-5 overflow-y-auto p-5 lg:p-7" aria-live="polite">{messages.map((message) => <article key={message.id} className={`max-w-[88%] ${message.role === "analyst" ? "ml-auto" : "mr-auto"}`} onClick={() => message.role === "aether" && setActiveMessageId(message.id)}><div className="mb-2 flex items-center gap-2 text-[9px] font-bold uppercase tracking-[.14em] text-slate-600"><span>{message.role === "aether" ? "Aether analysis" : "Analyst query"}</span>{message.role === "aether" && <span className="text-violet-300/60">AI-generated</span>}</div><div className={`rounded-xl border p-4 text-sm leading-7 ${message.role === "analyst" ? "border-cyan-300/15 bg-cyan-300/[.055] text-slate-200" : activeMessageId === message.id ? "border-violet-300/20 bg-violet-300/[.05] text-slate-300" : "border-white/[.08] bg-white/[.02] text-slate-300"}`}>{message.text}{message.role === "aether" && message.reportIds && <button type="button" className="mt-4 block text-[10px] font-semibold text-violet-200" onClick={() => setActiveMessageId(message.id)}>{message.reportIds.length} evidence citations →</button>}</div></article>)}</div>
-        <form className="border-t border-white/[.08] bg-[#0d161f] p-4" onSubmit={(event) => { event.preventDefault(); ask(); }}><div className="flex gap-2"><textarea className={`${controlClass} min-h-12 flex-1 resize-none py-3`} rows={1} value={prompt} onChange={(event) => setPrompt(event.target.value)} placeholder={`Ask Aether in ${modes.find((item) => item.id === mode)?.label.toLowerCase()} mode…`} aria-label="Message Aether" /><button type="submit" className={`${primaryButtonClass} self-stretch`} disabled={!prompt.trim()}>Analyze <span aria-hidden="true">↑</span></button></div><p className="mt-2 text-[9px] text-slate-600">Enter submits · Responses are deterministic and cite only stored demonstration reports.</p></form>
+        <form className="border-t border-white/[.08] bg-[#0d161f] p-4" onSubmit={(event) => { event.preventDefault(); void ask(); }}><div className="flex gap-2"><textarea className={`${controlClass} min-h-12 flex-1 resize-none py-3`} rows={1} value={prompt} onChange={(event) => setPrompt(event.target.value)} placeholder={`Ask Aether in ${modes.find((item) => item.id === mode)?.label.toLowerCase()} mode…`} aria-label="Message Aether" /><button type="submit" className={`${primaryButtonClass} self-stretch`} disabled={!prompt.trim() || isThinking}>{isThinking ? "Analyzing…" : "Analyze"} <span aria-hidden="true">↑</span></button></div><p className="mt-2 text-[9px] text-slate-600">{brainStatus} Responses are deterministic and cite only stored demonstration reports.</p></form>
       </div>
 
       <aside className="border-t border-white/[.08] bg-[#0d161f] xl:border-l xl:border-t-0">

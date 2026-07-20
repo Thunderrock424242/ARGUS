@@ -118,3 +118,63 @@ export const searchQuerySchema = z
   );
 
 export const routeIdentifierSchema = z.string().trim().min(1).max(160).regex(/^[a-zA-Z0-9][a-zA-Z0-9._:-]*$/);
+
+export const relationshipsQuerySchema = z.object({
+  minConfidence: z.coerce.number().int().min(0).max(100).default(0),
+  analystState: z.enum(["automated", "needs-review", "confirmed", "rejected", "disputed"]).optional(),
+  relationshipType: z.enum(["confirmed-impact", "likely-impact", "possible-impact", "correlated-movement", "exposure-only", "hypothesized-consequence", "triggered-response", "escalated", "deescalated", "disrupted", "related-event", "disputed", "analyst-rejected"]).optional(),
+  nodeId: z.string().trim().min(1).max(160).optional(),
+  limit: z.coerce.number().int().min(1).max(250).default(100),
+}).strict();
+
+export const marketImpactsQuerySchema = z.object({
+  minAnomaly: z.coerce.number().int().min(0).max(100).default(0),
+  analystState: z.enum(["automated", "needs-review", "confirmed", "rejected", "disputed"]).optional(),
+  eventId: z.string().trim().min(1).max(160).optional(),
+  assetId: z.string().trim().min(1).max(160).optional(),
+}).strict();
+
+const analystNameSchema = z.string().trim().min(1).max(100);
+
+export const relationshipReviewRequestSchema = z.object({
+  analystState: z.enum(["needs-review", "confirmed", "rejected", "disputed"]),
+  reviewerName: analystNameSchema,
+  reason: z.string().trim().min(3).max(2_000),
+  analystNotes: z.string().trim().max(10_000).optional(),
+  relationshipConfidence: z.number().int().min(0).max(100).optional(),
+  exposureConfidence: z.number().int().min(0).max(100).optional(),
+  causalConfidence: z.number().int().min(0).max(100).optional(),
+}).strict();
+
+const monitoringWidgetSchema = z.object({
+  id: routeIdentifierSchema,
+  type: z.enum(["map", "camera", "timeline", "impact-graph", "market-chart", "alert-stream", "regional-panel", "report-feed", "collector-status", "aether-brief", "conflict-profile", "watchlist-activity", "review-queue"]),
+  title: z.string().trim().min(1).max(160),
+  x: z.number().int().min(0).max(11),
+  y: z.number().int().min(0).max(10_000),
+  width: z.number().int().min(1).max(12),
+  height: z.number().int().min(1).max(100),
+  configuration: z.record(z.string(), z.union([z.string(), z.number(), z.boolean()])),
+}).strict();
+
+export const monitoringLayoutSaveSchema = z.object({
+  reviewerName: analystNameSchema,
+  name: z.string().trim().min(1).max(120),
+  widgets: z.array(monitoringWidgetSchema).max(60),
+}).strict();
+
+export const alertActionRequestSchema = z.object({
+  action: z.enum(["acknowledge", "dismiss"]),
+  reviewerName: analystNameSchema,
+}).strict();
+
+export const demoSeedRequestSchema = z.object({
+  reviewerName: analystNameSchema,
+  confirmation: z.literal("seed-demonstration-data"),
+}).strict();
+
+export const retentionRequestSchema = z.object({
+  reviewerName: analystNameSchema,
+  before: dateTime,
+  collections: z.array(z.enum(["reports", "relationship-history", "state-history", "alerts"])).min(1).max(4).optional(),
+}).strict();

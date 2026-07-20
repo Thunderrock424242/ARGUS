@@ -2,14 +2,34 @@ import { requireAdmin } from "@/lib/api/admin-guard";
 import { DEMONSTRATION_DATA_LABEL } from "@/lib/api/read-models";
 import { jsonData, jsonError, requestIdFrom } from "@/lib/api/responses";
 import { validateJsonBody } from "@/lib/api/validation";
-import { recordReviewAction, ReviewActionError, reviewRequestSchema } from "@/lib/admin/review";
+import { reviewRequestSchema } from "@/lib/admin/review";
+import {
+  DurableOperationError,
+  recordDurableEventReview,
+} from "@/packages/database/durable-operations";
+import type { D1DocumentDatabase } from "@/packages/database/d1-read-model-provider";
 
 export const dynamic = "force-dynamic";
 
-export async function POST(request: Request): Promise<Response> {
+interface ReviewRouteContext {
+  adminToken?: string;
+  database?: D1DocumentDatabase;
+}
+
+export async function POST(
+  request: Request,
+  context: ReviewRouteContext = {},
+): Promise<Response> {
   const requestId = requestIdFrom(request);
-  const guard = await requireAdmin(request, "review", requestId);
+  const guard = await requireAdmin(request, "review", requestId, context.adminToken);
   if (!guard.authorized) return guard.response;
+
+  if (!context.database) {
+    return jsonError(503, "durable_store_unavailable", "D1 is required for analyst review writes.", {
+      requestId,
+      headers: guard.rateLimitHeaders,
+    });
+  }
 
   const body = await validateJsonBody(request, reviewRequestSchema);
   if (!body.success) {
@@ -21,29 +41,29 @@ export async function POST(request: Request): Promise<Response> {
   }
 
   try {
-    const result = await recordReviewAction(body.data, requestId);
+    const result = await recordDurableEventReview(context.database, body.data, requestId);
     return jsonData(
       {
         status: "recorded",
-        auditId: result.auditId,
-        occurredAt: result.occurredAt,
-        proposedEffect: result.effect,
-        durability: "process-memory",
-        canonicalDataMutated: false,
+        auditId: result.audit.id,
+        occurredAt: result.audit.occurredAt,
+        event: result.event,
+        durability: "d1",
+        canonicalDataMutated: true,
         dataClassification: "demonstration",
         demoDataLabel: DEMONSTRATION_DATA_LABEL,
       },
       {
-        status: 202,
+        status: 200,
         headers: guard.rateLimitHeaders,
         meta: {
           requestId,
-          notice: "Connect D1AuditRecorder and a writable provider before enabling durable review mutations.",
+          notice: "The read model, historical state, and audit entry were committed in one D1 batch.",
         },
       },
     );
   } catch (error) {
-    if (error instanceof ReviewActionError) {
+    if (error instanceof DurableOperationError) {
       return jsonError(error.status, error.code, error.message, {
         requestId,
         headers: guard.rateLimitHeaders,

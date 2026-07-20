@@ -366,7 +366,18 @@ export type AuditAction =
   | "priority-pinned"
   | "watchlist-added"
   | "source-edited"
-  | "collector-run";
+  | "collector-run"
+  | "relationship-confirmed"
+  | "relationship-rejected"
+  | "relationship-disputed"
+  | "relationship-recalculated"
+  | "market-assessment-reviewed"
+  | "consequence-converted"
+  | "alert-acknowledged"
+  | "alert-dismissed"
+  | "monitoring-layout-saved"
+  | "read-model-seeded"
+  | "retention-enforced";
 
 export interface AuditLogEntry {
   id: string;
@@ -375,7 +386,20 @@ export interface AuditLogEntry {
   actorName: string;
   actorType: "analyst" | "system" | "collector" | "Aether";
   action: AuditAction;
-  targetType: "event" | "claim" | "report" | "source" | "watchlist" | "brief" | "collector";
+  targetType:
+    | "event"
+    | "claim"
+    | "report"
+    | "source"
+    | "watchlist"
+    | "brief"
+    | "collector"
+    | "relationship"
+    | "market-assessment"
+    | "conflict"
+    | "alert"
+    | "monitoring-layout"
+    | "read-model";
   targetId: string;
   summary: string;
   before?: unknown;
@@ -484,6 +508,408 @@ export interface PlatformMetrics {
   demoDataLabel: string;
 }
 
+export type GraphNodeType =
+  | "event"
+  | "entity"
+  | "location"
+  | "country"
+  | "region"
+  | "industry"
+  | "company"
+  | "infrastructure"
+  | "stock"
+  | "etf"
+  | "index"
+  | "commodity"
+  | "currency"
+  | "cryptocurrency"
+  | "supply-chain";
+
+export type RelationshipType =
+  | "confirmed-impact"
+  | "likely-impact"
+  | "possible-impact"
+  | "correlated-movement"
+  | "exposure-only"
+  | "hypothesized-consequence"
+  | "triggered-response"
+  | "escalated"
+  | "deescalated"
+  | "disrupted"
+  | "related-event"
+  | "disputed"
+  | "analyst-rejected";
+
+export type AnalystRelationshipState =
+  | "automated"
+  | "needs-review"
+  | "confirmed"
+  | "rejected"
+  | "disputed";
+
+export interface IntelligenceGraphNode {
+  id: string;
+  type: GraphNodeType;
+  label: string;
+  subtitle?: string;
+  description: string;
+  eventId?: string;
+  countryCode?: string;
+  region?: string;
+  latitude?: number;
+  longitude?: number;
+  tags: string[];
+  dataClassification: DemoDataClassification;
+  demoDataLabel: string;
+}
+
+export interface IntelligenceRelationship {
+  id: string;
+  sourceNodeId: string;
+  sourceNodeType: GraphNodeType;
+  targetNodeId: string;
+  targetNodeType: GraphNodeType;
+  relationshipType: RelationshipType;
+  relationshipConfidence: number;
+  exposureConfidence?: number;
+  causalConfidence?: number;
+  marketAnomalyScore?: number;
+  supportingReportIds: string[];
+  contradictingReportIds: string[];
+  explanation: string;
+  detectionMethod:
+    | "rule"
+    | "structured-data"
+    | "market-analysis"
+    | "semantic-analysis"
+    | "analyst";
+  createdAt: string;
+  lastRecalculatedAt: string;
+  analystState: AnalystRelationshipState;
+  analystNotes?: string;
+  modelVersion: string;
+  dataClassification: DemoDataClassification;
+  demoDataLabel: string;
+}
+
+export interface RelationshipHistoryEntry {
+  id: string;
+  relationshipId: string;
+  occurredAt: string;
+  relationshipConfidence: number;
+  exposureConfidence?: number;
+  causalConfidence?: number;
+  marketAnomalyScore?: number;
+  analystState: AnalystRelationshipState;
+  explanation: string;
+  supportingReportIds: string[];
+  contradictingReportIds: string[];
+  rulesetVersion: string;
+  actor: "system" | "Aether" | "analyst";
+  dataClassification: DemoDataClassification;
+}
+
+export interface ImpactRuleCondition {
+  field: "category" | "severity" | "status" | "tag" | "country" | "region";
+  operator: "equals" | "includes" | "minimum";
+  value: string | number;
+}
+
+export interface ImpactRule {
+  id: string;
+  name: string;
+  enabled: boolean;
+  triggerCategories: EventCategory[];
+  requiredEntityTypes?: string[];
+  requiredKeywords?: string[];
+  targetNodeTypes: GraphNodeType[];
+  targetNodeIds?: string[];
+  relationshipType: RelationshipType;
+  timeWindowHours: number;
+  maximumDistanceKm?: number;
+  baseRelationshipConfidence: number;
+  baseExposureConfidence?: number;
+  baseCausalConfidence?: number;
+  conditions: ImpactRuleCondition[];
+  explanationTemplate: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type MarketAssetType =
+  | "stock"
+  | "etf"
+  | "index"
+  | "commodity"
+  | "currency"
+  | "cryptocurrency"
+  | "government-debt"
+  | "sector-basket"
+  | "industry-basket";
+
+export interface MarketAsset {
+  id: string;
+  symbol: string;
+  name: string;
+  type: MarketAssetType;
+  exchange?: string;
+  currency: string;
+  countryCode?: string;
+  sector?: string;
+  industry?: string;
+  exposureTags: string[];
+  dataClassification: DemoDataClassification;
+  demoDataLabel: string;
+}
+
+export interface MarketImpactAssessment {
+  id: string;
+  eventId: string;
+  assetId: string;
+  exposureConfidence: number;
+  relationshipConfidence: number;
+  marketAnomalyScore: number;
+  causalConfidence: number;
+  priceBefore?: number;
+  priceAfter?: number;
+  percentChange?: number;
+  volumeChangePercent?: number;
+  normalVolatility?: number;
+  sectorChangePercent?: number;
+  indexChangePercent?: number;
+  broaderMarketChangePercent?: number;
+  commodityChangePercent?: number;
+  currencyChangePercent?: number;
+  supportingReportIds: string[];
+  contradictingReportIds: string[];
+  explanation: string;
+  analystState: AnalystRelationshipState;
+  calculatedAt: string;
+  modelVersion: string;
+  dataClassification: DemoDataClassification;
+  demoDataLabel: string;
+}
+
+export interface SourceAttributedEstimate {
+  id: string;
+  metric: "casualties" | "displaced" | "infrastructure-damage";
+  minimum: number;
+  maximum: number;
+  asOf: string;
+  sourceReportIds: string[];
+  confidence: number;
+  methodology: string;
+}
+
+export interface ConflictProfile {
+  id: string;
+  slug: string;
+  name: string;
+  countries: string[];
+  regions: string[];
+  startDate: string;
+  currentPhase: string;
+  keyActorNodeIds: string[];
+  territorialAreas: string[];
+  eventIds: string[];
+  relationshipIds: string[];
+  estimates: SourceAttributedEstimate[];
+  recentDevelopments: string[];
+  humanitarianEffects: string[];
+  infrastructureEffects: string[];
+  economicEffects: string[];
+  relatedSanctions: string[];
+  collectionGaps: string[];
+  disputedFigures: string[];
+  analystNotes: string;
+  aetherAssessment: string;
+  updatedAt: string;
+  dataClassification: DemoDataClassification;
+  demoDataLabel: string;
+}
+
+export interface RegionalIntelligenceProfile {
+  id: string;
+  name: string;
+  kind: "country" | "region";
+  countryCode?: string;
+  threatLevel: "baseline" | "guarded" | "elevated" | "high" | "critical";
+  threatEvidenceReportIds: string[];
+  activeEventIds: string[];
+  developingEventIds: string[];
+  conflictProfileIds: string[];
+  keyNodeIds: string[];
+  marketAssessmentIds: string[];
+  watchlistIds: string[];
+  strategicInfrastructure: string[];
+  collectionGaps: string[];
+  latestAssessment: string;
+  analystNotes: string;
+  updatedAt: string;
+  dataClassification: DemoDataClassification;
+  demoDataLabel: string;
+}
+
+export type IntelligenceStateChangeType =
+  | TimelineEntryType
+  | "relationship-created"
+  | "relationship-recalculated"
+  | "market-assessment-created"
+  | "watchlist-triggered"
+  | "alert-issued";
+
+export interface IntelligenceStateChange {
+  id: string;
+  occurredAt: string;
+  type: IntelligenceStateChangeType;
+  eventId?: string;
+  relationshipId?: string;
+  marketAssessmentId?: string;
+  title: string;
+  description: string;
+  before?: Record<string, unknown>;
+  after?: Record<string, unknown>;
+  reportIds: string[];
+  actor: "system" | "Aether" | "analyst" | "source";
+  dataClassification: DemoDataClassification;
+}
+
+export type AlertType =
+  | "new-event"
+  | "priority-event"
+  | "severity-change"
+  | "confidence-change"
+  | "official-confirmation"
+  | "watchlist-match"
+  | "contradiction"
+  | "market-anomaly"
+  | "infrastructure-disruption"
+  | "relationship-detected"
+  | "consequence-predicted"
+  | "source-status"
+  | "brief-ready";
+
+export type AlertPriority = "low" | "normal" | "high" | "critical";
+export type AlertState = "queued" | "active" | "acknowledged" | "dismissed" | "expired";
+
+export interface IntelligenceAlert {
+  id: string;
+  type: AlertType;
+  priority: AlertPriority;
+  state: AlertState;
+  title: string;
+  message: string;
+  voiceMessage: string;
+  eventId?: string;
+  relationshipId?: string;
+  createdAt: string;
+  acknowledgedAt?: string;
+  dismissedAt?: string;
+  deduplicationKey: string;
+  cooldownSeconds: number;
+  visualRequired: true;
+  dataClassification: DemoDataClassification;
+  demoDataLabel: string;
+}
+
+export interface AlertSettings {
+  masterAudio: boolean;
+  voiceAlerts: boolean;
+  interfaceSounds: boolean;
+  voiceVolume: number;
+  soundVolume: number;
+  minimumSeverity: EventSeverity;
+  minimumConfidence: number;
+  minimumRelationshipConfidence: number;
+  minimumMarketAnomaly: number;
+  enabledCategories: EventCategory[];
+  enabledRegions: string[];
+  enabledAssetTypes: MarketAssetType[];
+  watchlistOnly: boolean;
+  quietMode: boolean;
+  doNotDisturbStart?: string;
+  doNotDisturbEnd?: string;
+  repeatCooldownMinutes: number;
+  speechRate: number;
+}
+
+export interface VoiceAlertRequest {
+  message: string;
+  priority: AlertPriority;
+  eventId?: string;
+  relationshipId?: string;
+  interruptCurrent?: boolean;
+}
+
+export interface VoiceAlertProvider {
+  speak(request: VoiceAlertRequest): Promise<void>;
+  stop(): void;
+  isSpeaking(): boolean;
+}
+
+export type CameraAvailability = "available" | "unavailable" | "blocked" | "unknown";
+export type CameraEmbedPermission = "verified" | "link-only" | "not-permitted" | "unknown";
+
+export interface PublicCameraSource {
+  id: string;
+  name: string;
+  operator: string;
+  sourceUrl: string;
+  embedUrl?: string;
+  latitude: number;
+  longitude: number;
+  location: string;
+  country: string;
+  category: "traffic" | "city" | "weather" | "volcano" | "port" | "airport" | "emergency" | "news";
+  usageInformation: string;
+  attributionRequirements: string;
+  embedPermission: CameraEmbedPermission;
+  lastSuccessfulCheck?: string;
+  availability: CameraAvailability;
+  relatedEventIds: string[];
+  relatedRegionIds: string[];
+  relatedInfrastructureIds: string[];
+  refreshIntervalSeconds: number;
+  accessRestrictions: string[];
+  dataClassification: DemoDataClassification;
+  demoDataLabel: string;
+}
+
+export type MonitoringWidgetType =
+  | "map"
+  | "camera"
+  | "timeline"
+  | "impact-graph"
+  | "market-chart"
+  | "alert-stream"
+  | "regional-panel"
+  | "report-feed"
+  | "collector-status"
+  | "aether-brief"
+  | "conflict-profile"
+  | "watchlist-activity"
+  | "review-queue";
+
+export interface MonitoringWidget {
+  id: string;
+  type: MonitoringWidgetType;
+  title: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  configuration: Record<string, string | number | boolean>;
+}
+
+export interface MonitoringLayout {
+  id: string;
+  name: string;
+  widgets: MonitoringWidget[];
+  updatedAt: string;
+  dataClassification: DemoDataClassification;
+  demoDataLabel: string;
+}
+
 export interface IntelligenceDataProvider {
   getEvents(): Promise<IntelligenceEvent[]>;
   getEventBySlug(slug: string): Promise<IntelligenceEvent | null>;
@@ -491,6 +917,17 @@ export interface IntelligenceDataProvider {
   getBriefs(): Promise<IntelligenceBrief[]>;
   getWatchlists(): Promise<WatchlistEntry[]>;
   getSources(): Promise<IntelligenceSource[]>;
+  getGraphNodes(): Promise<IntelligenceGraphNode[]>;
+  getRelationships(): Promise<IntelligenceRelationship[]>;
+  getRelationshipHistory(): Promise<RelationshipHistoryEntry[]>;
+  getMarketAssets(): Promise<MarketAsset[]>;
+  getMarketImpacts(): Promise<MarketImpactAssessment[]>;
+  getConflictProfiles(): Promise<ConflictProfile[]>;
+  getRegionalProfiles(): Promise<RegionalIntelligenceProfile[]>;
+  getStateHistory(): Promise<IntelligenceStateChange[]>;
+  getAlerts(): Promise<IntelligenceAlert[]>;
+  getCameraSources(): Promise<PublicCameraSource[]>;
+  getMonitoringLayouts(): Promise<MonitoringLayout[]>;
 }
 
 export interface AetherCitation {

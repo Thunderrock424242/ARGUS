@@ -4,23 +4,28 @@
 
 ARGUS is a personal, public-information situational-awareness platform. It separates individual source reports from correlated intelligence events, exposes the evidence behind automated confidence, and gives a human analyst the final review authority. Its built-in analyst interface is called **Aether**.
 
+The public demonstration is published at [thunderrock424242.github.io/ARGUS](https://thunderrock424242.github.io/ARGUS/).
+
 > **Demonstration data — not real-world intelligence.** The bundled scenarios, organizations, people, identifiers, reports, and assessments are fictional. ARGUS is not affiliated with any intelligence service, military, law-enforcement body, emergency service, or government agency.
 
 ## What is included
 
 - A dark, responsive command center, event explorer and dossiers
-- A MapLibre global event map with filters and event previews
+- An immersive Global Operations View with switchable MapLibre 3D globe and flat-map modes, live report stream, layer controls, alerts, and event previews
+- An evidence-linked relationship graph, multi-step impact chains, deterministic consequence rules, and analyst review controls
+- Market-exposure assessments with separate anomaly, relationship, exposure, and causal-confidence scores
+- Conflict and regional profiles, stored-state timeline playback, Aether voice alerts, a controlled camera registry, and a configurable monitoring wall
 - Sources, review queues, watchlists, briefs, system health, and Aether surfaces
 - 24 fictional events, 60+ reports, 15 sources, 10 watchlists, and 5 briefs
 - Rule-based duplicate detection, event correlation, claim extraction, contradiction checks, and confidence scoring
 - Network-free development collectors for RSS/Atom, USGS, NASA EONET, GDACS, ReliefWeb, NWS, CISA KEV, and GDELT
-- Read-only REST APIs plus disabled-by-default administrative review and collector routes
-- A Drizzle schema and migration for Cloudflare D1
+- Read APIs plus disabled-by-default, token-protected D1 administrative review, layout, alert, seed, and retention routes
+- A versioned D1 read-model provider, durable audit path, Drizzle schema, and migrations
 - Vitest coverage for the intelligence core and API security boundaries
 
 ## Stack
 
-Next.js App Router and React 19 run through vinext on Cloudflare Workers. TypeScript, Tailwind CSS, MapLibre GL, Recharts, Zod, Drizzle ORM, D1, Vitest, and Playwright provide the application, data, validation, and test layers.
+Vite and React 19 produce the static site for GitHub Pages. React Router handles browser-side routes, while a separate Cloudflare Worker hosts the API, optional D1 data, and Aether “brain.” TypeScript, Tailwind CSS, MapLibre GL, Recharts, Zod, Drizzle ORM, Vitest, and Playwright provide the application, data model, validation, and test layers.
 
 ## Run locally
 
@@ -32,7 +37,7 @@ Copy-Item .env.example .env.local
 npm run dev
 ```
 
-The normal Next development server uses `npm run dev`; `npm run dev:sites` exercises the vinext/Cloudflare path. The default application is fully network-free and reads only fictional fixtures.
+The Vite development server runs the interface. Run `npm run brain:dev` in a second terminal when testing the standalone REST API and Aether Worker. The published interface is fully static and starts from fictional fixtures, then hydrates the Global Operations View from the Worker when `VITE_ARGUS_API_URL` is configured. It keeps the bundled fallback if that Worker is unavailable.
 
 Useful verification commands:
 
@@ -43,13 +48,30 @@ npm test
 npm run build
 ```
 
+`npm run build` writes the deployable GitHub Pages site to `dist/`. Pushes to `main` publish that directory through `.github/workflows/deploy-pages.yml`.
+
+## Free hosting split
+
+- **Site:** GitHub Pages serves the static interface at no application-server cost.
+- **Brain:** Cloudflare Workers serves read APIs, deterministic Aether, scheduled retention, and disabled-by-default administrative routes.
+- **Data:** the Worker selects D1 when a `DB` binding exists and otherwise uses immutable fictional fixtures. Empty or unavailable D1 collections fall back independently, so a first deployment remains usable.
+
+Validate and deploy the Worker with:
+
+```powershell
+npm run brain:check
+npm run brain:deploy
+```
+
+After the first Worker deployment, create the GitHub repository variable `ARGUS_API_URL` with the resulting `https://...workers.dev` URL and rerun the Pages workflow. Until that variable is set—or whenever the Worker is unavailable—Aether uses its bundled deterministic fallback so the site remains usable.
+
 ## Administrative API safety
 
-`POST /api/admin/review` and `POST /api/admin/collectors/run` return `503 admin_disabled` unless `ARGUS_ADMIN_TOKEN` is set on the server. Send the configured value only as `Authorization: Bearer <token>`. Never put it in browser code, a URL, a committed file, a log, or an API response.
+The Worker mounts administrative routes, but they return `503 admin_disabled` unless `ARGUS_ADMIN_TOKEN` is stored as a Worker secret. Durable routes also require the `DB` binding. Send the token only as `Authorization: Bearer <token>` from a trusted administrative client; never put it in GitHub Pages code, a `VITE_` variable, a URL, a committed file, a log, or an API response.
 
-The current mock provider is immutable. Review requests are validated and audit-recorded in bounded process memory, then return `canonicalDataMutated: false`. Wire the included D1 audit adapter and a transactional writable provider before treating review actions as durable. Administrative collector requests are always `dry-run`; they cannot turn on network collection.
+Event reviews, relationship reviews, alert actions, monitoring layouts, read-model seeding, and retention operate on versioned D1 documents and append audit/history records. The browser does not call these routes because a static public client cannot safely hold administrator credentials. Administrative collector requests remain `dry-run`; they cannot turn on network collection.
 
-## REST endpoints
+## Public Worker endpoints
 
 | Method | Path | Purpose |
 | --- | --- | --- |
@@ -61,10 +83,15 @@ The current mock provider is immutable. Review requests are validated and audit-
 | GET | `/api/briefs/:slug` | One intelligence brief |
 | GET | `/api/search?q=...` | Cross-domain provider search |
 | GET | `/api/health` | Safe provider and API health summary |
-| POST | `/api/admin/review` | Protected, validated review/audit action |
-| POST | `/api/admin/collectors/run` | Protected network-free collector exercise |
+| GET | `/api/relationships` | Evidence-linked graph nodes, relationships, and history |
+| GET | `/api/market-impacts` | Fictional asset exposure and anomaly assessments |
+| GET | `/api/conflicts` | Conflict dossiers and country/regional profiles |
+| GET | `/api/operations` | Global Operations counts and latest alerts |
+| GET | `/api/operations/snapshot` | Hydration snapshot for the Global Operations View |
 
-All API responses are `no-store`, carry a request ID, redact credential-shaped fields, and label fictional data. Unknown query and body fields are rejected.
+Protected Worker endpoints include `POST /api/admin/review`, `POST /api/admin/relationships/:id`, `POST /api/admin/alerts/:id`, `PUT /api/admin/layouts/:id`, `POST /api/admin/demo-seed`, and `POST /api/admin/retention`.
+
+These endpoints run under `npm run brain:dev` and are hosted by the standalone Worker, not at the GitHub Pages origin. All API responses are `no-store`, carry a request ID, redact credential-shaped fields, and label fictional data. Unknown query and body fields are rejected. Administrative handlers require both explicit server configuration and authorization.
 
 ## Documentation
 
@@ -75,6 +102,7 @@ All API responses are `no-store`, carry a request ID, redact credential-shaped f
 - [Processing, correlation, and confidence](docs/intelligence-pipeline.md)
 - [Analyst review workflows](docs/analyst-workflows.md)
 - [Aether and map architecture](docs/aether-and-map.md)
+- [Operations intelligence, impact, market, alerts, cameras, and playback](docs/operations-intelligence.md)
 - [Security and ethical OSINT](docs/security-and-ethics.md)
 - [Deployment, limitations, and roadmap](docs/deployment-and-roadmap.md)
 

@@ -1,7 +1,5 @@
-"use client";
-
 import { useEffect } from "react";
-import Link from "next/link";
+import Link from "@/components/navigation/link";
 import { DemoBanner } from "@/components/ui/demo-banner";
 
 export default function GlobalError({ error, reset }: { error: Error & { digest?: string }; reset: () => void }) {

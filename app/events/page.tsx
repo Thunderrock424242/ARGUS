@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Link from "@/components/navigation/link";
 import { DemoBanner, PageHeader, primaryButtonClass } from "@/components/domain/argus-ui";
 import { EventsExplorer } from "@/components/pages/events-explorer";
 import { demoEvents } from "@/packages/shared/demo-data";

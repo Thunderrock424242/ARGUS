@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Link from "@/components/navigation/link";
 import { BriefsIndex } from "@/components/pages/briefs-index";
 import { DemoBanner, PageHeader, primaryButtonClass } from "@/components/domain/argus-ui";
 import { demoBriefs } from "@/packages/shared/demo-data";

@@ -1,5 +1,5 @@
 import { AlertTriangle, Database, LockKeyhole, RadioTower, SearchX, WifiOff } from "lucide-react";
-import Link from "next/link";
+import Link from "@/components/navigation/link";
 
 const icons = {
   empty: SearchX,

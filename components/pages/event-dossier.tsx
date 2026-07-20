@@ -1,11 +1,11 @@
 "use client";
 
-import Link from "next/link";
+import Link from "@/components/navigation/link";
 import { useMemo, useState } from "react";
-import type { AuditLogEntry, EventTimelineEntry, IntelligenceEvent, SourceReport, IntelligenceSource } from "@/packages/shared/types";
+import type { AuditLogEntry, EventTimelineEntry, IntelligenceEvent, IntelligenceGraphNode, IntelligenceRelationship, MarketAsset, MarketImpactAssessment, SourceReport, IntelligenceSource } from "@/packages/shared/types";
 import { ConfidenceMeter, PanelHeader, RouteLink, StatusBadge, formatDate, panelClass, titleCase } from "@/components/domain/argus-ui";
 
-const tabs = ["overview", "timeline", "claims", "sources", "entities", "related", "audit"] as const;
+const tabs = ["overview", "timeline", "claims", "sources", "entities", "related", "impacts", "audit"] as const;
 type DossierTab = (typeof tabs)[number];
 
 function claimTone(status: string): "green" | "amber" | "red" | "cyan" {
@@ -34,6 +34,10 @@ export function EventDossier({
   relatedEvents,
   timeline,
   audit,
+  graphNodes,
+  relationships,
+  marketAssets,
+  marketImpacts,
 }: {
   event: IntelligenceEvent;
   reports: SourceReport[];
@@ -41,6 +45,10 @@ export function EventDossier({
   relatedEvents: IntelligenceEvent[];
   timeline: EventTimelineEntry[];
   audit: AuditLogEntry[];
+  graphNodes: IntelligenceGraphNode[];
+  relationships: IntelligenceRelationship[];
+  marketAssets: MarketAsset[];
+  marketImpacts: MarketImpactAssessment[];
 }) {
   const [tab, setTab] = useState<DossierTab>("overview");
   const [timelineFilter, setTimelineFilter] = useState("all");
@@ -144,9 +152,20 @@ export function EventDossier({
         <section className={panelClass}><PanelHeader eyebrow="Correlation graph" title={`${relatedEvents.length} related intelligence events`} /><div className="grid gap-4 p-5 md:grid-cols-2 xl:grid-cols-3">{relatedEvents.map((related) => <Link key={related.id} href={`/events/${related.slug}`} className="rounded-lg border border-white/[.08] bg-white/[.018] p-4 transition hover:border-cyan-300/25 hover:bg-cyan-300/[.025]"><div className="flex items-center justify-between"><StatusBadge tone="cyan">{titleCase(related.category)}</StatusBadge><span className="font-mono text-[10px] text-slate-500">{related.automatedConfidence}%</span></div><h3 className="mt-4 text-sm font-semibold leading-5 text-slate-200">{related.title}</h3><p className="mt-2 line-clamp-2 text-xs leading-5 text-slate-500">{related.summary}</p></Link>)}{relatedEvents.length === 0 && <p className="text-sm text-slate-500">No related events have crossed the correlation threshold.</p>}</div></section>
       )}
 
+      {tab === "impacts" && (
+        <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
+          <section className={panelClass}><PanelHeader eyebrow="Graph intelligence" title="Event relationships" action={<Link href="/relationships" className="text-[10px] font-semibold text-cyan-200">Open full graph →</Link>} /><div className="divide-y divide-white/[.06]">{relationships.map((relationship) => { const source = graphNodes.find((node) => node.id === relationship.sourceNodeId); const target = graphNodes.find((node) => node.id === relationship.targetNodeId); return <article key={relationship.id} className="p-4"><div className="flex flex-wrap items-center gap-2"><StatusBadge tone={relationship.analystState === "confirmed" ? "green" : relationship.analystState === "disputed" || relationship.analystState === "rejected" ? "red" : "amber"}>{titleCase(relationship.analystState)}</StatusBadge><StatusBadge tone="cyan">{titleCase(relationship.relationshipType)}</StatusBadge></div><p className="mt-3 text-sm font-semibold text-slate-200">{source?.label ?? relationship.sourceNodeId} → {target?.label ?? relationship.targetNodeId}</p><p className="mt-2 text-xs leading-5 text-slate-500">{relationship.explanation}</p><dl className="mt-3 grid grid-cols-4 gap-2"><ImpactScore label="Relationship" value={relationship.relationshipConfidence} /><ImpactScore label="Exposure" value={relationship.exposureConfidence} /><ImpactScore label="Causal" value={relationship.causalConfidence} /><ImpactScore label="Anomaly" value={relationship.marketAnomalyScore} /></dl><p className="mt-3 text-[9px] text-slate-600">{relationship.supportingReportIds.length} supporting · {relationship.contradictingReportIds.length} contradicting · {titleCase(relationship.detectionMethod)}</p></article>; })}{relationships.length === 0 ? <div className="p-8 text-center text-sm text-slate-600">No graph relationship is associated with this event.</div> : null}</div></section>
+          <section className={panelClass}><PanelHeader eyebrow="Market monitoring" title="Possible market impact" /><div className="divide-y divide-white/[.06]">{marketImpacts.map((assessment) => { const asset = marketAssets.find((candidate) => candidate.id === assessment.assetId); return <article key={assessment.id} className="p-4"><div className="flex items-center justify-between gap-3"><p className="font-mono text-sm font-semibold text-slate-200">{asset?.symbol ?? assessment.assetId}</p><StatusBadge tone={assessment.marketAnomalyScore >= 70 ? "amber" : "neutral"}>{assessment.marketAnomalyScore} anomaly</StatusBadge></div><p className="mt-1 text-[9px] text-slate-600">{asset?.name}</p><p className="mt-3 text-[10px] leading-5 text-slate-400">{assessment.explanation}</p><div className="mt-3 rounded border border-amber-300/15 bg-amber-300/[.03] p-3 text-[9px] leading-4 text-amber-100">Causal confidence {assessment.causalConfidence}%. Timing and exposure do not establish causation.</div></article>; })}{marketImpacts.length === 0 ? <div className="p-8 text-center text-sm text-slate-600">No unusual market movement is associated with this event.</div> : null}</div></section>
+        </div>
+      )}
+
       {tab === "audit" && (
         <section className={panelClass}><PanelHeader eyebrow="Immutable activity record" title="Analyst and system audit log" /><div className="divide-y divide-white/[.06]">{audit.map((entry) => <article key={entry.id} className="grid gap-3 p-5 md:grid-cols-[170px_1fr_auto]"><time className="font-mono text-[10px] text-slate-500">{formatDate(entry.occurredAt)}</time><div><p className="text-sm font-medium text-slate-200">{entry.summary}</p><p className="mt-1 text-[10px] text-slate-500">{entry.actorName} · {titleCase(entry.actorType)} · Correlation {entry.correlationId.slice(-8)}</p>{entry.reason && <p className="mt-2 text-xs text-slate-400">Reason: {entry.reason}</p>}</div><StatusBadge tone={entry.actorType === "analyst" ? "green" : entry.actorType === "Aether" ? "violet" : "cyan"}>{titleCase(entry.action)}</StatusBadge></article>)}</div>{audit.length === 0 && <p className="p-8 text-center text-sm text-slate-500">No audit actions recorded for this event.</p>}</section>
       )}
     </>
   );
+}
+
+function ImpactScore({ label, value }: { label: string; value?: number }) {
+  return <div className="rounded border border-white/[.06] p-2 text-center"><dt className="text-[7px] uppercase tracking-[.1em] text-slate-600">{label}</dt><dd className="mt-1 font-mono text-[10px] text-slate-300">{value === undefined ? "—" : `${value}%`}</dd></div>;
 }

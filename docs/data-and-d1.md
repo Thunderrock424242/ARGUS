@@ -2,13 +2,13 @@
 
 ## Provider boundary
 
-Application code reads through `IntelligenceDataProvider`. Its current methods return events, one event by slug, reports, briefs, watchlists, and sources. `MockIntelligenceDataProvider` returns a fresh structured clone on every call, preventing a page or test from mutating canonical fixtures.
+Application code reads through `IntelligenceDataProvider`. `MockIntelligenceDataProvider` returns a fresh structured clone on every call, preventing a page or test from mutating canonical fixtures. `D1IntelligenceDataProvider` reads complete versioned documents from `intelligence_read_models` and falls back per collection when D1 is empty or temporarily unavailable.
 
-Production work should add a D1-backed implementation with equivalent read behavior plus an explicit write service. Do not add incidental writes to the read provider. Review, correlation, report insertion, confidence updates, and audit insertion should commit in one transaction or fail together where D1 capabilities permit.
+Reads remain separate from `durable-operations.ts`. Event and relationship reviews, alert actions, layout saves, historical snapshots, and audit records use D1 batch operations. A failed batch does not return a successful analyst decision.
 
 ## D1 binding and Drizzle
 
-`.openai/hosting.json` declares the logical `DB` binding. Sites owns the actual Cloudflare resource and deployment wiring. `vite.config.ts` supplies a project-local placeholder for development; it is not a production database identifier.
+The GitHub Pages frontend has no database binding. The Worker automatically uses D1 when its environment contains a `DB` binding; otherwise it retains the immutable mock provider. Do not place a database identifier, administrator token, or credential in the frontend.
 
 The schema is in `db/schema.ts`, Drizzle configuration is in `drizzle.config.ts`, and generated migration SQL is under `drizzle/`. After an intentional schema edit:
 
@@ -17,6 +17,19 @@ npm run db:generate
 ```
 
 Review the SQL, constraints, delete behavior, indexes, and migration ordering before applying it. Never edit the migration journal casually after a migration has been deployed.
+
+Provision and initialize a remote database with the current migration files:
+
+```powershell
+npx wrangler d1 create argus-intelligence
+# Add the returned DB binding to wrangler.jsonc, then apply in order:
+npx wrangler d1 execute argus-intelligence --remote --file=drizzle/0001_moaning_power_man.sql
+npx wrangler d1 execute argus-intelligence --remote --file=drizzle/0002_ambiguous_spot.sql
+npx wrangler d1 execute argus-intelligence --remote --file=drizzle/0003_solid_phil_sheldon.sql
+npx wrangler secret put ARGUS_ADMIN_TOKEN
+```
+
+After deployment, call `POST /api/admin/demo-seed` once with the bearer token, a reviewer name, and `confirmation: "seed-demonstration-data"`. The seed is idempotent and updates versions on subsequent runs.
 
 ## Durable model
 
@@ -29,6 +42,7 @@ The schema includes:
 - analyst reviews and append-only audit logs
 - collector runs and review queue items
 - watchlists and intelligence briefs
+- versioned materialized API documents used by the Worker
 
 Fields used for filtering and relationships remain typed columns; richer evolving assessments use JSON. Checks constrain severity and confidence. Unique indexes protect source URLs, event slugs, and source/external-ID pairs. Foreign keys state intentional cascade or restrict behavior.
 
@@ -39,7 +53,7 @@ Fields used for filtering and relationships remain typed columns; richer evolvin
 - `MemoryAuditRecorder` is bounded and suitable only for development/tests.
 - `D1AuditRecorder` targets the existing `audit_logs` table through a small structural D1 interface.
 
-Before production review is enabled, inject `D1AuditRecorder` into the review service and use a writable event repository in the same server-side operation. The current route returns `durability: "process-memory"` and `canonicalDataMutated: false` so clients cannot mistake an accepted demo action for a durable decision.
+Protected Worker review routes now return `durability: "d1"` and `canonicalDataMutated: true` only after the versioned document, state/history entry, and audit row succeed. The older memory recorder remains available solely for isolated service tests.
 
 ## Development data
 
@@ -55,10 +69,10 @@ Fixtures must never reuse a real breaking event, vulnerable person, operational 
 
 ## Production migration checklist
 
-1. Provision Sites D1 and apply reviewed migrations.
-2. Implement the D1 read provider and compare it against provider contract tests.
-3. Implement idempotent report inserts keyed by source/external ID, canonical URL, and content hash.
-4. Make event updates, evidence links, queue changes, and audits transactional.
+1. Provision a D1 database for the standalone Worker and apply reviewed migrations.
+2. Seed or ingest records and verify the `X-ARGUS-Data-Store: d1` response header.
+3. Implement idempotent live report inserts keyed by source/external ID, canonical URL, and content hash.
+4. Extend the current transactional read-model writes to normalized evidence links and ingestion queues.
 5. Add cursor pagination and query indexes based on measured workloads.
 6. Add backup/export, retention, correction, and deletion procedures.
 7. Keep raw evidence access restricted and record every read or export that requires elevated permission.

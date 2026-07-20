@@ -6,39 +6,43 @@ ARGUS is organized around one central distinction: a **source report** is a sing
 
 | Layer | Location | Responsibility |
 | --- | --- | --- |
-| Application routes | `app/` | Server-rendered pages, client entry points, and REST handlers |
+| Browser entry and routes | `site/main.tsx` | Vite entry point, React Router route table, titles, and loading boundary |
+| Application views | `app/` | Route components and reusable REST handler modules |
 | Reusable interface | `components/` | Shell, command center, maps, dossiers, review, sources, Aether |
 | Shared domain | `packages/shared/` | Types and explicitly fictional fixtures |
 | Intelligence core | `packages/intelligence/` | Collection adapters, duplicate detection, correlation, claims, confidence, pipeline |
-| Provider boundary | `packages/database/provider.ts` | Read contract and mock implementation |
+| Impact intelligence | `packages/intelligence/impact-engine.ts` and `market-impact.ts` | Deterministic consequence rules, graph chains, market anomaly scoring, and causal limits |
+| Alert policy | `packages/intelligence/alert-manager.ts` | Priority queue, deduplication, cooldowns, acknowledgement, and bounded history |
+| Provider boundary | `packages/database/provider.ts` and `d1-read-model-provider.ts` | Delegating read contract, immutable fallback, and versioned D1 implementation |
+| Durable operations | `packages/database/durable-operations.ts` | D1 event/relationship review, alert, layout, seed, retention, history, and audit batches |
 | Durable schema | `db/` and `drizzle/` | D1 tables, constraints, indexes, and migration |
 | Server policy | `lib/` | API validation, safe responses, admin auth, URL rules, rate limits, audit adapters |
-| Edge entry | `worker/index.ts` | vinext request dispatch, image optimization, response security headers |
+| Public brain | `worker/index.ts` | Standalone read/Aether routing, D1 selection, GitHub Pages CORS, protected administration, and scheduled retention |
 
-The UI and API depend on `IntelligenceDataProvider`, not on fixture arrays or Drizzle queries directly. The current provider is an immutable mock that returns structured clones. A D1 implementation can replace it without changing consumers.
+The API depends on `IntelligenceDataProvider`, not on fixture arrays or Drizzle queries directly. Route modules hold a stable delegating provider reference; the Worker points it at D1 before dispatch when `DB` exists, otherwise it resets to immutable fixtures. The Global Operations browser view hydrates from `/api/operations/snapshot` and keeps its bundled fallback when the Worker is unavailable.
 
 ## Request flow
 
 ```text
-Browser or API client
+GitHub Pages browser ----> static Vite interface
         |
+        | HTTPS with restricted CORS
         v
-Next App Router / REST route
+Cloudflare Worker ----> reusable REST route
         |
         +-- Zod query or body validation
         +-- admin bearer check and rate limit when required
         |
         v
-IntelligenceDataProvider ----> mock fixtures today
-        |                       D1 provider next
+IntelligenceDataProvider ----> D1 versioned read models when bound
+        |                       immutable fixture fallback otherwise
         v
-Safe JSON response / React view
-        |
-        v
-Worker security headers
+Safe JSON response
 ```
 
-Public REST routes are read-only and `no-store`. Report lists deliberately omit `rawPayload`. Administrative routes have a separate boundary and are unavailable unless a server-only token is configured.
+Public reads and deterministic `/api/aether` are `no-store`. Report lists deliberately omit `rawPayload`. Administrative routes are mounted but disabled without the server-side token, and every durable mutation additionally requires D1. The static browser never receives the token.
+
+The browser starts from immutable demonstration records and can hydrate the Global Operations surface from the Worker. Protected event/relationship reviews, alert actions, monitoring layouts, read-model seeding, and retention are durable D1 operations. Public browser analyst controls remain local until an identity-aware gateway can authorize individuals without exposing a shared secret.
 
 ## Collection and processing flow
 
@@ -64,4 +68,4 @@ The collector runtime executes one persistent job and returns an explicit retry 
 
 ## Current versus planned
 
-Current screens and reads are a complete fictional demonstration. The D1 schema and migration exist, but the runtime provider still uses fixtures. Review actions record a bounded in-memory audit entry and explicitly report that canonical data was not mutated. Live collector adapters exist, but web-triggered runs are hard-coded to dry-run. These boundaries are intentional and must remain visible until a durable provider, identity/roles, and a hardened outbound transport are deployed.
+Current screens and data remain a fictional demonstration. D1-backed reads, versioned documents, audited write batches, scheduled retention, globe mode, browser notifications, and Worker hydration are implemented. Live collector adapters remain hard-coded to dry-run from web requests, and public analyst controls remain local until identity/roles and hardened outbound transport are deployed.

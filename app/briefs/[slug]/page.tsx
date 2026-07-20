@@ -1,14 +1,11 @@
-import Link from "next/link";
-import { notFound } from "next/navigation";
+import Link from "@/components/navigation/link";
+import NotFound from "@/app/not-found";
 import { DemoBanner, PageHeader, StatusBadge, buttonClass, formatDate, panelClass, titleCase } from "@/components/domain/argus-ui";
 import { demoBriefs, demoEvents } from "@/packages/shared/demo-data";
 
-export function generateStaticParams() { return demoBriefs.map((brief) => ({ slug: brief.slug })); }
-
-export default async function BriefPage({ params }: { params: Promise<{ slug: string }> }) {
-  const { slug } = await params;
+export default function BriefPage({ slug }: { slug: string }) {
   const brief = demoBriefs.find((item) => item.slug === slug);
-  if (!brief) notFound();
+  if (!brief) return <NotFound />;
   const eventById = new Map(demoEvents.map((event) => [event.id, event]));
   const sections = [
     ["Regional developments", brief.regionalDevelopments], ["Watchlist activity", brief.watchlistActivity], ["Escalation risks", brief.escalationRisks], ["Confidence changes", brief.confidenceChanges], ["Disputed reporting", brief.disputedReporting], ["Events requiring review", brief.eventsRequiringReview], ["Resolved events", brief.resolvedEvents],

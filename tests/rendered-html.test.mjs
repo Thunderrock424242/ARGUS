@@ -1,56 +1,68 @@
 import assert from "node:assert/strict";
-import { access, readFile } from "node:fs/promises";
+import { access, readFile, readdir } from "node:fs/promises";
 import test from "node:test";
 
-async function render() {
-  const workerUrl = new URL("../dist/server/index.js", import.meta.url);
-  workerUrl.searchParams.set("test", `${process.pid}-${Date.now()}`);
-  const { default: worker } = await import(workerUrl.href);
-
-  return worker.fetch(
-    new Request("http://localhost/", {
-      headers: { accept: "text/html" },
-    }),
-    {
-      ASSETS: {
-        fetch: async () => new Response("Not found", { status: 404 }),
-      },
-    },
-    {
-      waitUntil() {},
-      passThroughOnException() {},
-    },
-  );
-}
-
-test("server-renders the ARGUS command center", async () => {
-  const response = await render();
-  assert.equal(response.status, 200);
-  assert.match(response.headers.get("content-type") ?? "", /^text\/html\b/i);
-
-  const html = await response.text();
-  assert.match(html, /<title>Command Center \| ARGUS<\/title>/i);
+test("exports the ARGUS global operations view for GitHub Pages", async () => {
+  const html = await readFile(new URL("../dist/index.html", import.meta.url), "utf8");
+  assert.match(html, /<title>Global Operations \| ARGUS<\/title>/i);
   assert.match(html, /ARGUS/);
-  assert.match(html, /Global operating picture/i);
-  assert.match(html, /Demonstration data[^<]*not real-world intelligence/i);
   assert.match(html, /Observe\. Correlate\. Understand\./);
-  assert.doesNotMatch(html, /Your site is taking shape|react-loading-skeleton/i);
+  assert.match(html, /(?:href|src)="\/ARGUS\//);
+  assert.doesNotMatch(html, /\/_next\//);
+  assert.doesNotMatch(html, /\/ARGUS\/ARGUS\/(?:og|argus-icon)\.png/);
+  await access(new URL("../dist/.nojekyll", import.meta.url));
+  await access(
+    new URL(
+      "../dist/events/demo-helios-municipal-ransomware/index.html",
+      import.meta.url,
+    ),
+  );
+  await access(new URL("../dist/relationships/index.html", import.meta.url));
+  await access(new URL("../dist/timeline/index.html", import.meta.url));
+
+  const assetsDirectory = new URL("../dist/assets/", import.meta.url);
+  const assetFiles = (await readdir(assetsDirectory)).filter((file) => file.endsWith(".js"));
+  const bundles = await Promise.all(
+    assetFiles.map((file) => readFile(new URL(file, assetsDirectory), "utf8")),
+  );
+  const javascript = bundles.join("\n");
+  assert.match(javascript, /Global Operations View/i);
+  assert.match(javascript, /Hypothesis[^A-Za-z]+analyst review required/i);
+  assert.match(javascript, /Demonstration data[^<]*not real-world intelligence/i);
+  assert.doesNotMatch(javascript, /Your site is taking shape|react-loading-skeleton/i);
 });
 
 test("keeps the ARGUS shell and analyst routes in production source", async () => {
-  const [page, layout, css] = await Promise.all([
+  const [page, entry, css, operationsMap, operationsView, alertCenter, worker] = await Promise.all([
     readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
-    readFile(new URL("../app/layout.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../site/main.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
+    readFile(new URL("../components/dashboard/operations-map.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../components/operations/global-operations-view.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../components/operations/alert-center.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../worker/index.ts", import.meta.url), "utf8"),
   ]);
 
-  assert.match(page, /CommandCenter/);
-  assert.match(layout, /AppShell/);
-  assert.match(layout, /Analysis and Reporting of Global Unfolding Situations/);
+  assert.match(page, /GlobalOperationsView/);
+  assert.match(entry, /BrowserRouter/);
+  assert.match(entry, /AppShell/);
   assert.match(css, /prefers-reduced-motion:\s*reduce/);
+  assert.match(operationsMap, /projection:\s*\{\s*type:\s*"globe"/);
+  assert.match(operationsMap, /Switch to.*flat map.*3D globe/s);
+  assert.match(operationsView, /api\/operations\/snapshot/);
+  assert.match(alertCenter, /new Notification/);
+  assert.match(worker, /D1IntelligenceDataProvider/);
 
   for (const route of [
     "events",
+    "dashboard",
+    "relationships",
+    "consequences",
+    "conflicts",
+    "timeline",
+    "alerts",
+    "live-feeds",
+    "wall",
     "map",
     "review",
     "sources",

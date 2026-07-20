@@ -1,10 +1,10 @@
 "use client";
 
-import { ChevronRight, Layers3, LocateFixed, ShieldCheck, X } from "lucide-react";
-import Link from "next/link";
+import { ChevronRight, Globe2, Layers3, LocateFixed, Map as MapIcon, ShieldCheck, X } from "lucide-react";
+import Link from "@/components/navigation/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { Map as MapLibreMap, GeoJSONSource } from "maplibre-gl";
-import type { EventCategory, IntelligenceEvent } from "@/packages/shared/types";
+import type { EventCategory, IntelligenceEvent, IntelligenceGraphNode, IntelligenceRelationship } from "@/packages/shared/types";
 
 type MapFilters = {
   category: "all" | EventCategory;
@@ -12,6 +12,8 @@ type MapFilters = {
   confidence: number;
   watchlistOnly: boolean;
 };
+
+type ProjectionMode = "globe" | "mercator";
 
 function toFeatureCollection(events: IntelligenceEvent[]) {
   return {
@@ -36,11 +38,36 @@ function toFeatureCollection(events: IntelligenceEvent[]) {
   };
 }
 
-export function OperationsMap({ events }: { events: IntelligenceEvent[] }) {
+function toRelationshipFeatureCollection(
+  events: IntelligenceEvent[],
+  nodes: IntelligenceGraphNode[],
+  relationships: IntelligenceRelationship[],
+) {
+  const eventById = new Map(events.map((event) => [event.id, event]));
+  const coordinates = new Map(nodes.map((node) => {
+    const event = node.eventId ? eventById.get(node.eventId) : undefined;
+    const longitude = node.longitude ?? event?.longitude;
+    const latitude = node.latitude ?? event?.latitude;
+    return [node.id, longitude === undefined || latitude === undefined ? null : [longitude, latitude] as [number, number]];
+  }));
+  return {
+    type: "FeatureCollection" as const,
+    features: relationships.flatMap((relationship) => {
+      const source = coordinates.get(relationship.sourceNodeId);
+      const target = coordinates.get(relationship.targetNodeId);
+      if (!source || !target) return [];
+      return [{ type: "Feature" as const, geometry: { type: "LineString" as const, coordinates: [source, target] }, properties: { id: relationship.id, analystState: relationship.analystState, confidence: relationship.relationshipConfidence, relationshipType: relationship.relationshipType } }];
+    }),
+  };
+}
+
+export function OperationsMap({ events, nodes = [], relationships = [] }: { events: IntelligenceEvent[]; nodes?: IntelligenceGraphNode[]; relationships?: IntelligenceRelationship[] }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
   const [mapReady, setMapReady] = useState(false);
   const [mapFailed, setMapFailed] = useState(false);
+  const [mapDegraded, setMapDegraded] = useState(false);
+  const [projectionMode, setProjectionMode] = useState<ProjectionMode>("globe");
   const [selectedSlug, setSelectedSlug] = useState<string | null>(null);
   const [filters, setFilters] = useState<MapFilters>({
     category: "all",
@@ -81,6 +108,7 @@ export function OperationsMap({ events }: { events: IntelligenceEvent[] }) {
           attributionControl: false,
           style: {
             version: 8,
+            projection: { type: "globe" },
             sources: {
               basemap: {
                 type: "raster",
@@ -109,9 +137,24 @@ export function OperationsMap({ events }: { events: IntelligenceEvent[] }) {
         map.addControl(new module.NavigationControl({ showCompass: false }), "bottom-right");
         map.addControl(new module.AttributionControl({ compact: true }), "bottom-right");
         mapRef.current = map;
+        map.on("error", () => setMapDegraded(true));
 
         map.on("load", () => {
           if (disposed) return;
+          map.addSource("argus-relationships", {
+            type: "geojson",
+            data: toRelationshipFeatureCollection(events, nodes, relationships),
+          });
+          map.addLayer({
+            id: "relationship-lines",
+            type: "line",
+            source: "argus-relationships",
+            paint: {
+              "line-color": ["match", ["get", "analystState"], "confirmed", "#34d399", "disputed", "#f87171", "rejected", "#64748b", "#fbbf24"],
+              "line-width": ["interpolate", ["linear"], ["get", "confidence"], 0, 0.6, 100, 2.8],
+              "line-opacity": 0.72,
+            },
+          });
           map.addSource("argus-events", {
             type: "geojson",
             data: toFeatureCollection(filteredEvents),
@@ -235,6 +278,13 @@ export function OperationsMap({ events }: { events: IntelligenceEvent[] }) {
     source?.setData(toFeatureCollection(filteredEvents));
   }, [filteredEvents, mapReady]);
 
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!mapReady || !map) return;
+    const source = map.getSource("argus-relationships") as GeoJSONSource | undefined;
+    source?.setData(toRelationshipFeatureCollection(events, nodes, relationships));
+  }, [events, mapReady, nodes, relationships]);
+
   function locateHighestPriority() {
     const event = [...filteredEvents].sort(
       (left, right) => right.severity - left.severity || right.automatedConfidence - left.automatedConfidence,
@@ -242,6 +292,13 @@ export function OperationsMap({ events }: { events: IntelligenceEvent[] }) {
     if (!event || event.longitude === undefined || event.latitude === undefined) return;
     setSelectedSlug(event.slug);
     mapRef.current?.flyTo({ center: [event.longitude, event.latitude], zoom: 4.2, duration: 900 });
+  }
+
+  function toggleProjection() {
+    const next: ProjectionMode = projectionMode === "globe" ? "mercator" : "globe";
+    setProjectionMode(next);
+    mapRef.current?.setProjection({ type: next });
+    mapRef.current?.easeTo({ zoom: next === "globe" ? 1.35 : 1.6, duration: 700 });
   }
 
   return (
@@ -306,9 +363,21 @@ export function OperationsMap({ events }: { events: IntelligenceEvent[] }) {
           <button className="map-filter" type="button" onClick={locateHighestPriority}>
             <LocateFixed size={12} /> Focus priority
           </button>
+          <button
+            className="map-filter map-projection-toggle"
+            type="button"
+            aria-label={`Switch to ${projectionMode === "globe" ? "flat map" : "3D globe"} mode`}
+            aria-pressed={projectionMode === "globe"}
+            disabled={!mapReady}
+            onClick={toggleProjection}
+          >
+            {projectionMode === "globe" ? <MapIcon size={12} /> : <Globe2 size={12} />}
+            {projectionMode === "globe" ? "Flat map" : "3D globe"}
+          </button>
         </div>
         <div className="map-live-indicator">
-          <span className="status-dot online" /> {filteredEvents.length} signals in view
+          <span className={`status-dot ${mapDegraded ? "warning" : "online"}`} /> {filteredEvents.length} signals in view
+          {mapDegraded ? " · tiles degraded" : ` · ${projectionMode === "globe" ? "globe" : "flat"} mode`}
         </div>
       </div>
 

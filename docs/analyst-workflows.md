@@ -38,7 +38,7 @@ Content-Type: application/json
 }
 ```
 
-Responses include a request/correlation ID and audit ID but never echo authorization. In the MVP they also say `durability: "process-memory"` and `canonicalDataMutated: false`. This is an honest demonstration boundary, not a successful durable edit.
+Responses include a request/correlation ID and audit ID but never echo authorization. With D1 configured, successful reviews say `durability: "d1"` and `canonicalDataMutated: true` only after the versioned event, state-history record, and audit row commit. Without D1, the route returns `durable_store_unavailable` rather than accepting a non-durable decision.
 
 ## Production transaction
 

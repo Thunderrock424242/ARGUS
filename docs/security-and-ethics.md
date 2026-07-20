@@ -13,10 +13,13 @@ ARGUS handles hostile public content and potentially consequential analysis. Sec
 - URL rules for credentials, schemes, local/private/link-local addresses, unsafe ports, and host allowlists
 - Dry-run-only web collector execution; no request field can enable live mode
 - Injected collector transport, redirect refusal, time/size caps, and address-verification hooks
-- Append-ready audit records and a D1 audit adapter
+- Versioned D1 read models with batched state/history/audit writes and scheduled bounded retention
 - Worker CSP, anti-framing, no-sniff, referrer, permissions, cross-origin, and HTTPS transport headers
 - Database checks, uniqueness constraints, foreign keys, and indexes
 - React text rendering rather than untrusted `dangerouslySetInnerHTML`
+- Relationship and market outputs keep causal confidence separate from exposure, anomaly, and temporal correlation
+- Browser speech and notifications remain interaction-gated, deduplicated, and paired with visual equivalents
+- Camera embedding remains disabled unless operator permission is explicitly verified
 
 Credential redaction is a last defense, not permission to put secrets in response objects. Raw feed payloads stay out of report list responses.
 
@@ -26,11 +29,13 @@ Validation must happen when a source is proposed and again immediately before ev
 
 The web API never accepts an arbitrary URL for immediate fetching. Source testing belongs in a queued worker with egress controls and an audit record.
 
+Camera and market-provider URLs use the same rule: validate on onboarding and immediately before every server-side request, pin public DNS results, reject redirects unless individually revalidated, and enforce response-size and time limits. The frontend never receives a provider credential and never proxies a restricted camera.
+
 ## Authentication and authorization
 
-The admin token is an MVP deployment switch, not full identity. Production should use Sites access controls or sign-in, bind actions to a stable user ID, and enforce roles server-side. Suggested roles are viewer, analyst, reviewer, source manager, and administrator. UI visibility is not authorization.
+The admin token is an MVP deployment switch, not full identity. Protected Worker routes are disabled unless the secret is configured; durable routes also require D1. Production should use a dedicated access gateway or sign-in provider, bind actions to a stable user ID, and enforce roles server-side. Suggested roles are viewer, analyst, reviewer, source manager, and administrator. UI visibility is not authorization, and the public Pages bundle never contains the shared token.
 
-Rotate secrets, keep them in the hosting secret manager, and never use `NEXT_PUBLIC_` for credentials. Do not log authorization headers, source credentials, raw cookies, or full rejected request bodies.
+Rotate secrets, keep them in the hosting secret manager, and never use `VITE_` for credentials. Do not log authorization headers, source credentials, raw cookies, or full rejected request bodies.
 
 ## Content safety
 

@@ -14,19 +14,20 @@ Copy-Item .env.example .env.local
 npm run dev
 ```
 
-Use `npm run dev:sites` when testing the Cloudflare/vinext runtime and local D1 binding simulation. Do not run both development commands on the same port.
+Use `npm run brain:dev` in a second terminal when testing the standalone Cloudflare Worker API. The Vite frontend development server defaults to port 5173 and Wrangler reports the Worker's local port when it starts.
 
 ## Environment variables
 
 | Variable | Required | Default | Purpose |
 | --- | --- | --- | --- |
 | `ARGUS_ADMIN_TOKEN` | No | unset | Enables protected administrative routes only when configured |
-| `ARGUS_DATA_PROVIDER` | No | `mock` | Documents the selected provider; only the mock provider is wired in this MVP |
 | `ARGUS_COLLECTOR_MODE` | No | `dry-run` | Operational intent; admin web requests remain dry-run regardless |
+| `RETENTION_DAYS` | No | `180` | Worker schedule retention window, clamped to 30-3650 days |
+| `VITE_ARGUS_API_URL` | No | unset | Public URL of the separately hosted ARGUS brain; the browser fallback is used when unset |
 
-`.env*` is ignored except `.env.example`. Values prefixed `NEXT_PUBLIC_` are browser-visible, so no ARGUS credential may use that prefix. In hosted environments, configure secrets through the Sites runtime rather than committing them.
+`.env*` is ignored except `.env.example`. Values prefixed `VITE_` are browser-visible, so no ARGUS credential may use that prefix. Store Worker secrets through Cloudflare rather than committing them.
 
-Generate an administrator token with a cryptographically secure local tool (for example, 32 random bytes encoded as hex), store it only in `.env.local` or the hosting secret manager, and send it in the `Authorization: Bearer` header. Restart the local server after changing environment variables.
+`ARGUS_ADMIN_TOKEN` enables the Worker's protected administrative handlers only when D1 is also configured. Generate it with a cryptographically secure local tool (for example, 32 random bytes encoded as hex), store it with `wrangler secret put ARGUS_ADMIN_TOKEN`, and send it only from a trusted administrative client in the `Authorization: Bearer` header.
 
 ## Development modes
 
@@ -44,14 +45,15 @@ npm run lint
 npm run typecheck
 npm test
 npm run build
+npm run brain:check
 ```
 
 `npm run test:e2e` runs Playwright suites when browser tests are present. `npm run db:generate` creates a Drizzle migration after an intentional schema change. Inspect generated SQL before applying it anywhere.
 
 ## Troubleshooting
 
-- **Admin route returns 503:** this is expected until `ARGUS_ADMIN_TOKEN` is configured server-side.
-- **Admin route returns 401:** use the exact bearer value; do not send the token as a query parameter.
-- **Map is blank:** verify WebGL support and that the browser can reach the configured public tile service. The rest of ARGUS remains usable without map rendering.
-- **D1 binding unavailable:** use the mock provider locally or run through the Sites/Vite path with the `DB` binding. Do not silently fall back during a production write.
+- **Admin route is unavailable on Pages:** correct; Pages is static. Worker admin routes also stay disabled until both the D1 binding and admin secret exist.
+- **Map or globe is blank:** verify WebGL support and that the browser can reach the configured public tile service. Switch to flat-map mode if the device struggles with globe projection. The rest of ARGUS remains usable without map rendering.
+- **Remote Aether is unavailable:** confirm the GitHub repository variable `ARGUS_API_URL` matches the deployed Worker URL and that the Pages origin is listed in `ALLOWED_ORIGINS`. The UI intentionally falls back to its bundled deterministic analysis.
+- **D1 binding unavailable:** the Worker intentionally falls back to immutable demonstration fixtures, and durable writes return `durable_store_unavailable`.
 - **Collector run shows no network access:** correct; administrative API collector runs are always dry-run in this MVP.

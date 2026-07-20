@@ -7,7 +7,7 @@ const argusEnv = env as unknown as { DB?: D1Database };
 export function getDb() {
   if (!argusEnv.DB) {
     throw new Error(
-      "Cloudflare D1 binding `DB` is unavailable. Set the `d1` field in .openai/hosting.json to `DB` or let your control plane inject the real binding values before using the database."
+      "Cloudflare D1 binding `DB` is unavailable. Add the real D1 binding to the standalone Worker's wrangler configuration before using the database."
     );
   }
 

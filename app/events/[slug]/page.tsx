@@ -1,22 +1,21 @@
-import Link from "next/link";
-import { notFound } from "next/navigation";
+import Link from "@/components/navigation/link";
+import NotFound from "@/app/not-found";
 import { DemoBanner, PageHeader, SeverityMark, StatusBadge, buttonClass, primaryButtonClass, titleCase } from "@/components/domain/argus-ui";
 import { EventDossier } from "@/components/pages/event-dossier";
 import { demoAuditEntries, demoEvents, demoReports, demoSources, demoTimelineEntries } from "@/packages/shared/demo-data";
+import { demoGraphNodes, demoMarketAssets, demoMarketImpacts, demoRelationships } from "@/packages/shared/operations-demo-data";
 
-export function generateStaticParams() {
-  return demoEvents.map((event) => ({ slug: event.slug }));
-}
-
-export default async function EventDossierPage({ params }: { params: Promise<{ slug: string }> }) {
-  const { slug } = await params;
+export default function EventDossierPage({ slug }: { slug: string }) {
   const event = demoEvents.find((item) => item.slug === slug);
-  if (!event) notFound();
+  if (!event) return <NotFound />;
 
   const reports = demoReports.filter((report) => event.sourceReportIds.includes(report.id) || report.eventId === event.id);
   const relatedEvents = demoEvents.filter((candidate) => event.relatedEventIds.includes(candidate.id));
   const timeline = demoTimelineEntries.filter((entry) => entry.eventId === event.id).sort((a, b) => new Date(a.occurredAt).getTime() - new Date(b.occurredAt).getTime());
   const audit = demoAuditEntries.filter((entry) => entry.targetId === event.id || event.confirmedFacts.some((claim) => claim.id === entry.targetId));
+  const eventNode = demoGraphNodes.find((node) => node.type === "event" && node.eventId === event.id);
+  const impactRelationships = eventNode ? demoRelationships.filter((relationship) => relationship.sourceNodeId === eventNode.id || relationship.targetNodeId === eventNode.id) : [];
+  const marketImpacts = demoMarketImpacts.filter((assessment) => assessment.eventId === event.id);
 
   return (
     <main className="route-page page-stack space-y-5 p-4 sm:p-6 xl:p-8">
@@ -33,7 +32,7 @@ export default async function EventDossierPage({ params }: { params: Promise<{ s
           ["Status", titleCase(event.status)], ["Confidence", `${event.automatedConfidence}%`], ["Supporting sources", event.supportingSourceCount], ["Official sources", event.officialSourceCount], ["Contradictions", event.contradictionCount], ["Reports", event.sourceReportIds.length], ["Watchlists", event.watchlistIds.length], ["Updated", new Date(event.lastUpdatedAt).toLocaleDateString("en", { month: "short", day: "2-digit", timeZone: "UTC" })],
         ].map(([label, value]) => <div key={String(label)} className="rounded-lg border border-white/[.08] bg-[#101820]/80 p-3"><p className="text-[8px] font-bold uppercase tracking-[.14em] text-slate-600">{label}</p><p className="mt-2 text-sm font-semibold text-slate-200">{value}</p></div>)}
       </section>
-      <EventDossier event={event} reports={reports} sources={demoSources} relatedEvents={relatedEvents} timeline={timeline} audit={audit} />
+      <EventDossier event={event} reports={reports} sources={demoSources} relatedEvents={relatedEvents} timeline={timeline} audit={audit} graphNodes={demoGraphNodes} relationships={impactRelationships} marketAssets={demoMarketAssets} marketImpacts={marketImpacts} />
     </main>
   );
 }

@@ -1,59 +1,73 @@
-import vinext from "vinext";
-import { defineConfig } from "vite";
-import hostingConfig from "./.openai/hosting.json";
-import { sites } from "./build/sites-vite-plugin";
+import react from "@vitejs/plugin-react";
+import { cp, mkdir, readFile, writeFile } from "node:fs/promises";
+import { resolve } from "node:path";
+import { defineConfig, type Plugin } from "vite";
+import { demoBriefs, demoEvents } from "./packages/shared/demo-data";
 
-const ARGUS_PLACEHOLDER_DATABASE_ID =
-  "00000000-0000-4000-8000-000000000000";
+const staticRoutes = [
+  "dashboard",
+  "map",
+  "events",
+  "relationships",
+  "consequences",
+  "conflicts",
+  "timeline",
+  "alerts",
+  "live-feeds",
+  "wall",
+  "briefs",
+  "watchlists",
+  "sources",
+  "review",
+  "aether",
+  "system",
+  "settings",
+  ...demoEvents.map((event) => `events/${event.slug}`),
+  ...demoBriefs.map((brief) => `briefs/${brief.slug}`),
+];
 
-const { d1, r2 } = hostingConfig;
-
-// macOS Seatbelt blocks FSEvents, so Codex previews need polling for HMR.
-const isCodexSeatbeltSandbox = process.env.CODEX_SANDBOX === "seatbelt";
-
-const localBindingConfig = {
-  main: "./worker/index.ts",
-  compatibility_flags: ["nodejs_compat"],
-  d1_databases: d1
-    ? [
-        {
-          binding: d1,
-          database_name: "argus-intelligence",
-          database_id: ARGUS_PLACEHOLDER_DATABASE_ID,
-        },
-      ]
-    : [],
-  r2_buckets: r2
-    ? [
-        {
-          binding: r2,
-          bucket_name: "argus-evidence",
-        },
-      ]
-    : [],
-};
-
-export default defineConfig(async () => {
-  // Keep Wrangler and Miniflare state project-local. These are non-secret tool
-  // settings; application environment belongs in ignored `.env*` files.
-  process.env.WRANGLER_WRITE_LOGS ??= "false";
-  process.env.WRANGLER_LOG_PATH ??= ".wrangler/logs";
-  process.env.MINIFLARE_REGISTRY_PATH ??= ".wrangler/registry";
-
-  // Wrangler snapshots its log path while the Cloudflare plugin is imported.
-  const { cloudflare } = await import("@cloudflare/vite-plugin");
-
+function githubPagesFallbacks(): Plugin {
   return {
-    server: isCodexSeatbeltSandbox
-      ? { watch: { useFsEvents: false, usePolling: true } }
-      : undefined,
-    plugins: [
-      vinext(),
-      sites(),
-      cloudflare({
-        viteEnvironment: { name: "rsc", childEnvironments: ["ssr"] },
-        config: localBindingConfig,
-      }),
-    ],
+    name: "argus-github-pages-fallbacks",
+    apply: "build",
+    async closeBundle() {
+      const outputDirectory = resolve("dist");
+      const indexPath = resolve(outputDirectory, "index.html");
+      const index = await readFile(indexPath, "utf8");
+      for (const route of staticRoutes) {
+        const routeDirectory = resolve(outputDirectory, route);
+        await mkdir(routeDirectory, { recursive: true });
+        await writeFile(resolve(routeDirectory, "index.html"), index);
+      }
+      await cp(indexPath, resolve(outputDirectory, "404.html"));
+      await writeFile(resolve(outputDirectory, ".nojekyll"), "");
+    },
   };
-});
+}
+
+function githubPagesBase(): string {
+  const repository = process.env.GITHUB_REPOSITORY ?? "Thunderrock424242/ARGUS";
+  const [owner = "Thunderrock424242", repositoryName = "ARGUS"] =
+    repository.split("/");
+  const defaultBase =
+    repositoryName.toLowerCase() === `${owner.toLowerCase()}.github.io`
+      ? "/"
+      : `/${repositoryName}/`;
+  const configured = process.env.ARGUS_PAGES_BASE_PATH;
+  if (!configured) return defaultBase;
+  return `/${configured.replace(/^\/+|\/+$/g, "")}/`;
+}
+
+export default defineConfig(({ command }) => ({
+  base: command === "serve" ? "/" : githubPagesBase(),
+  plugins: [react(), githubPagesFallbacks()],
+  resolve: {
+    alias: { "@": resolve(".") },
+  },
+  build: {
+    outDir: "dist",
+    emptyOutDir: true,
+    // MapLibre is intentionally isolated behind the lazy-loaded map routes.
+    chunkSizeWarningLimit: 1_100,
+  },
+}));

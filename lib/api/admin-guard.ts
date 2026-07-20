@@ -14,6 +14,7 @@ export async function requireAdmin(
   request: Request,
   scope: string,
   requestId: string,
+  configuredToken?: string,
 ): Promise<AdminGuardResult> {
   const rateLimit = await adminRateLimiter.check(requestRateLimitKey(request, scope));
   const headers = rateLimitHeaders(rateLimit);
@@ -27,7 +28,7 @@ export async function requireAdmin(
     };
   }
 
-  const authorization = authorizeAdminRequest(request);
+  const authorization = authorizeAdminRequest(request, configuredToken);
   if (!authorization.authorized) {
     if (authorization.reason === "disabled") {
       return {

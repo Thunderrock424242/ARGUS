@@ -6,13 +6,20 @@ async function gotoArgus(page: Page, path: string) {
   return response;
 }
 
-test("command center exposes the operating picture and demonstration warning", async ({ page }) => {
+test("global operations exposes the live operating picture and demonstration warning", async ({ page }) => {
   await gotoArgus(page, "/");
-  await expect(page.getByRole("heading", { name: "Command Center" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Global Operations View" })).toBeVisible();
   await expect(page.getByText("Demonstration data — not real-world intelligence.").first()).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Operational layers" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Alert queue" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Report stream" })).toBeVisible();
+});
+
+test("the original command center remains available", async ({ page }) => {
+  await gotoArgus(page, "/dashboard");
+  await expect(page.getByRole("heading", { name: "Command Center" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Global situation overview" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Priority intelligence" })).toBeVisible();
-  await expect(page.getByText("Automated confidence indicates rule satisfaction")).toBeVisible();
 });
 
 test("events can be searched and opened as a dossier", async ({ page }) => {
@@ -51,9 +58,25 @@ test("review decisions update the local demonstration queue", async ({ page }) =
 });
 
 test("all primary analyst routes remain reachable", async ({ page }) => {
-  for (const route of ["/map", "/sources", "/watchlists", "/briefs", "/aether", "/system", "/settings"]) {
+  for (const route of ["/map", "/sources", "/watchlists", "/briefs", "/aether", "/system", "/settings", "/relationships", "/consequences", "/conflicts", "/timeline", "/alerts", "/live-feeds", "/wall"]) {
     const response = await gotoArgus(page, route);
     expect(response?.status(), route).toBe(200);
     await expect(page.getByText(/Demonstration data — not real-world intelligence/).first()).toBeVisible();
   }
+});
+
+test("impact graph exposes evidence and separate causal confidence", async ({ page }) => {
+  await gotoArgus(page, "/relationships");
+  await expect(page.getByRole("heading", { name: "Relationships & impact" })).toBeVisible();
+  await expect(page.getByRole("img", { name: /Impact graph with/ })).toBeVisible();
+  await expect(page.getByText(/Every edge retains independent confidence/)).toBeVisible();
+  await expect(page.getByText(/direct causation has not been confirmed/i).first()).toBeVisible();
+});
+
+test("alert center provides visual equivalents without automatic audio", async ({ page }) => {
+  await gotoArgus(page, "/alerts");
+  await expect(page.getByRole("heading", { name: "Alerts & Aether voice" })).toBeVisible();
+  await expect(page.getByText(/Voice alerts are disabled until the analyst enables ARGUS audio/)).toBeVisible();
+  await page.getByRole("button", { name: "Test visual" }).click();
+  await expect(page.getByRole("alert").filter({ hasText: "Test visual alert" })).toBeVisible();
 });

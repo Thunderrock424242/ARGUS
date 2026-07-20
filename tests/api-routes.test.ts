@@ -3,10 +3,18 @@ import { GET as getEvents } from "@/app/api/events/route";
 import { GET as getEvent } from "@/app/api/events/[slug]/route";
 import { GET as getReports } from "@/app/api/reports/route";
 import { GET as getHealth } from "@/app/api/health/route";
+import { GET as getConflicts } from "@/app/api/conflicts/route";
+import { GET as getMarketImpacts } from "@/app/api/market-impacts/route";
+import { GET as getOperations } from "@/app/api/operations/route";
+import { GET as getOperationsSnapshot } from "@/app/api/operations/snapshot/route";
+import { GET as getRelationships } from "@/app/api/relationships/route";
 import { GET as search } from "@/app/api/search/route";
+import { POST as askAether } from "@/app/api/aether/route";
 import { POST as review } from "@/app/api/admin/review/route";
 import { POST as runCollector } from "@/app/api/admin/collectors/run/route";
+import { seedDemonstrationReadModels } from "@/packages/database/d1-read-model-provider";
 import { demoEvents, demoSources } from "@/packages/shared/demo-data";
+import { FakeD1Database } from "./helpers/fake-d1";
 
 interface ApiTestPayload {
   data?: unknown;
@@ -93,6 +101,48 @@ describe.sequential("ARGUS API routes", () => {
     expect(healthData.services.collectors.networkCollectionEnabledFromApi).toBe(false);
   });
 
+  it("returns evidence-bound Aether analysis from the brain endpoint", async () => {
+    const response = await askAether(
+      new Request("https://argus.example/api/aether", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          prompt: "Explain the confidence score.",
+          contextEventIds: [demoEvents[0].id],
+        }),
+      }),
+    );
+    const payload = await body(response);
+    expect(response.status).toBe(200);
+    expect((payload.data as { answer: string }).answer).toContain(
+      "Aether-generated demonstration analysis",
+    );
+  });
+
+  it("serves evidence-linked relationships, market impacts, conflicts, and operations counts", async () => {
+    const relationshipResponse = await getRelationships(new Request("https://argus.example/api/relationships?minConfidence=65&analystState=needs-review"));
+    const relationshipPayload = await body(relationshipResponse) as { data: { relationships: Array<{ analystState: string; causalConfidence?: number }> }; meta: Record<string, unknown> };
+    expect(relationshipResponse.status).toBe(200);
+    expect(relationshipPayload.data.relationships.length).toBeGreaterThan(0);
+    expect(relationshipPayload.data.relationships.every((item) => item.analystState === "needs-review")).toBe(true);
+    expect(relationshipPayload.meta.warning).toContain("causation");
+
+    const marketResponse = await getMarketImpacts(new Request("https://argus.example/api/market-impacts?minAnomaly=70"));
+    const marketPayload = await body(marketResponse) as { data: { assessments: Array<{ marketAnomalyScore: number; causalConfidence: number }> } };
+    expect(marketPayload.data.assessments.every((item) => item.marketAnomalyScore >= 70)).toBe(true);
+    expect(marketPayload.data.assessments.every((item) => item.causalConfidence < 50)).toBe(true);
+
+    expect((await getConflicts(new Request("https://argus.example/api/conflicts"))).status).toBe(200);
+    const operationsPayload = await body(await getOperations(new Request("https://argus.example/api/operations"))) as { data: { counts: { relationships: number; activeAlerts: number } } };
+    expect(operationsPayload.data.counts.relationships).toBeGreaterThan(10);
+    expect(operationsPayload.data.counts.activeAlerts).toBeGreaterThan(0);
+    const snapshotPayload = await body(await getOperationsSnapshot(new Request("https://argus.example/api/operations/snapshot"))) as { data: { events: unknown[]; reports: Array<{ rawPayload: unknown }>; graphNodes: unknown[]; metrics: { sourcesTotal: number } } };
+    expect(snapshotPayload.data.events.length).toBeGreaterThan(20);
+    expect(snapshotPayload.data.graphNodes.length).toBeGreaterThan(10);
+    expect(snapshotPayload.data.metrics.sourcesTotal).toBeGreaterThan(10);
+    expect(snapshotPayload.data.reports[0].rawPayload).toEqual({ redacted: true });
+  });
+
   it("keeps administrative review unavailable until a token is configured", async () => {
     const response = await review(
       new Request("https://argus.example/api/admin/review", {
@@ -109,8 +159,10 @@ describe.sequential("ARGUS API routes", () => {
     expect((await body(response)).error?.code).toBe("admin_disabled");
   });
 
-  it("validates and audit-records an authorized review without claiming durable mutation", async () => {
+  it("validates and durably records an authorized review when D1 is available", async () => {
     process.env.ARGUS_ADMIN_TOKEN = adminToken;
+    const database = new FakeD1Database();
+    await seedDemonstrationReadModels(database);
     const response = await review(
       new Request("https://argus.example/api/admin/review", {
         method: "POST",
@@ -124,12 +176,15 @@ describe.sequential("ARGUS API routes", () => {
           reviewerName: "Test Analyst",
         }),
       }),
+      { database },
     );
     const payload = await body(response);
-    expect(response.status).toBe(202);
-    const reviewData = payload.data as { status: string; canonicalDataMutated: boolean };
+    expect(response.status).toBe(200);
+    const reviewData = payload.data as { status: string; canonicalDataMutated: boolean; durability: string };
     expect(reviewData.status).toBe("recorded");
-    expect(reviewData.canonicalDataMutated).toBe(false);
+    expect(reviewData.canonicalDataMutated).toBe(true);
+    expect(reviewData.durability).toBe("d1");
+    expect(database.auditRows).toHaveLength(1);
     expect(JSON.stringify(payload)).not.toContain(adminToken);
   });
 

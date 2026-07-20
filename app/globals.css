@@ -1483,6 +1483,7 @@ kbd {
   .operations-map { min-height: 390px; }
   .map-overlay-top { flex-direction: column; }
   .map-filter-row .map-filter:nth-child(n + 4) { display: none; }
+  .map-filter-row .map-projection-toggle { display: inline-flex; }
   .priority-item { grid-template-columns: auto minmax(0, 1fr); }
   .priority-confidence { grid-column: 2; text-align: left; }
   .command-hints { grid-template-columns: 1fr; }

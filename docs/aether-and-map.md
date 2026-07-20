@@ -25,9 +25,9 @@ validated analyst prompt
 
 Keep model credentials server-side, impose token and time budgets, rate-limit per analyst, prevent prompt text from changing system permissions, and provide a network-free fallback. Sensitive raw payloads and personal data should not be sent to a model without an explicit lawful policy.
 
-## Global map
+## Global map and globe
 
-The map is a visualization of event records, not a separate authority. MapLibre receives events with valid latitude/longitude, category, severity, automated confidence, verification state, status, and update time. Clustering and filtering happen in dedicated map state; selecting a marker opens an event preview and dossier link.
+The visualization is not a separate authority. MapLibre receives events with valid latitude/longitude, category, severity, automated confidence, verification state, status, and update time. It starts in supported globe projection and provides a labeled flat Mercator toggle. Clustering and filtering happen in dedicated map state; selecting a marker opens an event preview and dossier link. Tile failures produce a degraded status while event lists and dossiers remain usable.
 
 Location rules:
 
