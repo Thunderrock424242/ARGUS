@@ -1,6 +1,7 @@
 import { intelligenceDataProvider } from "@/packages/database/provider";
 import { relationshipsQuerySchema } from "@/lib/api/schemas";
 import { jsonData, jsonError, requestIdFrom } from "@/lib/api/responses";
+import { paginate } from "@/lib/api/read-models";
 import { validateSearchParams } from "@/lib/api/validation";
 
 export async function GET(request: Request): Promise<Response> {
@@ -17,11 +18,11 @@ export async function GET(request: Request): Promise<Response> {
       .filter((item) => item.relationshipConfidence >= query.data.minConfidence)
       .filter((item) => !query.data.analystState || item.analystState === query.data.analystState)
       .filter((item) => !query.data.relationshipType || item.relationshipType === query.data.relationshipType)
-      .filter((item) => !query.data.nodeId || item.sourceNodeId === query.data.nodeId || item.targetNodeId === query.data.nodeId)
-      .slice(0, query.data.limit);
-    const nodeIds = new Set(filtered.flatMap((item) => [item.sourceNodeId, item.targetNodeId]));
-    const relationshipIds = new Set(filtered.map((item) => item.id));
-    return jsonData({ relationships: filtered, nodes: nodes.filter((node) => nodeIds.has(node.id)), history: history.filter((entry) => relationshipIds.has(entry.relationshipId)) }, { meta: { requestId, total: filtered.length, dataClassification: "demonstration", warning: "Correlation and temporal order do not establish causation." } });
+      .filter((item) => !query.data.nodeId || item.sourceNodeId === query.data.nodeId || item.targetNodeId === query.data.nodeId);
+    const page = paginate(filtered, query.data.page, query.data.limit);
+    const nodeIds = new Set(page.items.flatMap((item) => [item.sourceNodeId, item.targetNodeId]));
+    const relationshipIds = new Set(page.items.map((item) => item.id));
+    return jsonData({ relationships: page.items, nodes: nodes.filter((node) => nodeIds.has(node.id)), history: history.filter((entry) => relationshipIds.has(entry.relationshipId)) }, { meta: { requestId, page: query.data.page, limit: query.data.limit, total: page.total, totalPages: page.totalPages, dataClassification: "demonstration", warning: "Correlation and temporal order do not establish causation." } });
   } catch {
     return jsonError(503, "data_unavailable", "Relationship data is temporarily unavailable.", { requestId });
   }

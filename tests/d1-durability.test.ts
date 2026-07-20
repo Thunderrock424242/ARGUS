@@ -28,8 +28,10 @@ describe("D1-backed ARGUS operations", () => {
     const seeded = await seedDemonstrationReadModels(database);
     expect(seeded.collections).toBe(16);
     expect(seeded.records).toBeGreaterThan(100);
-    expect(await provider.getRelationships()).toEqual(DEFAULT_DATASET.relationships);
-    expect(await provider.getEventBySlug(DEFAULT_DATASET.events[0].slug)).toEqual(DEFAULT_DATASET.events[0]);
+    const relationships = await provider.getRelationships();
+    expect(relationships).toEqual(DEFAULT_DATASET.relationships.map((relationship) => ({ ...relationship, recordVersion: 1 })));
+    expect(relationships.every((relationship) => relationship.recordVersion === 1)).toBe(true);
+    expect(await provider.getEventBySlug(DEFAULT_DATASET.events[0].slug)).toMatchObject({ ...DEFAULT_DATASET.events[0], recordVersion: 1 });
   });
 
   it("persists event decisions, history, and audit records in one D1 batch", async () => {
@@ -48,6 +50,29 @@ describe("D1-backed ARGUS operations", () => {
     expect(database.auditRows).toHaveLength(1);
     expect(await readModelById<IntelligenceEvent>(database, READ_MODEL_COLLECTIONS.events, event.id)).toMatchObject({ reviewerName: "Test Analyst", reviewRequired: false });
     expect(database.readModels.has(`${READ_MODEL_COLLECTIONS.stateHistory}:${result.stateChange.id}`)).toBe(true);
+  });
+
+  it("rejects a stale event revision without adding a second audit record", async () => {
+    const database = new FakeD1Database();
+    await seedDemonstrationReadModels(database);
+    const event = await readModelById<IntelligenceEvent>(database, READ_MODEL_COLLECTIONS.events, DEFAULT_DATASET.events[0].id);
+    expect(event?.recordVersion).toBe(1);
+
+    await recordDurableEventReview(database, {
+      action: "confirm",
+      eventId: event!.id,
+      reviewerName: "First Reviewer",
+      expectedVersion: 1,
+    }, "request-first-review");
+
+    await expect(recordDurableEventReview(database, {
+      action: "dispute",
+      eventId: event!.id,
+      reviewerName: "Stale Reviewer",
+      reason: "This browser held the older revision.",
+      expectedVersion: 1,
+    }, "request-stale-review")).rejects.toMatchObject({ status: 409, code: "stale_version" });
+    expect(database.auditRows).toHaveLength(1);
   });
 
   it("persists relationship review history without erasing evidence", async () => {
@@ -82,4 +107,3 @@ describe("D1-backed ARGUS operations", () => {
     expect([...database.readModels.values()].filter((row) => row.collection === READ_MODEL_COLLECTIONS.events).length).toBeGreaterThan(0);
   });
 });
-

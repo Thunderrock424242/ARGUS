@@ -1,10 +1,13 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Expand, Grip, Maximize2, Minimize2, RotateCcw, Save } from "lucide-react";
 import { StatusBadge, titleCase } from "@/components/domain/argus-ui";
 import type { MonitoringLayout, MonitoringWidget } from "@/packages/shared/types";
+import { useAuth } from "@/components/auth/auth-provider";
 
 export function MonitoringWall({ layouts }: { layouts: MonitoringLayout[] }) {
   const original = layouts[0];
+  const auth = useAuth();
+  const [activeLayout, setActiveLayout] = useState<MonitoringLayout | undefined>(() => original ? { ...structuredClone(original), recordVersion: 0 } : undefined);
   const [widgets, setWidgets] = useState<MonitoringWidget[]>(() => {
     if (typeof window === "undefined") return original?.widgets ?? [];
     const stored = window.localStorage.getItem("argus-monitoring-wall");
@@ -14,6 +17,32 @@ export function MonitoringWall({ layouts }: { layouts: MonitoringLayout[] }) {
   const [draggedId, setDraggedId] = useState("");
   const [notice, setNotice] = useState("Drag panels to reorder. Layout changes remain local to this browser.");
   const [fullScreen, setFullScreen] = useState(false);
+
+  useEffect(() => {
+    if (auth.status !== "authenticated" || !auth.can("layouts:write")) return;
+    let active = true;
+    void auth.authenticatedFetch("/api/admin/layouts")
+      .then(async (response) => {
+        if (!response.ok) throw new Error("Your monitoring layout could not be loaded.");
+        const payload = await response.json() as { data: MonitoringLayout[] };
+        if (!active) return;
+        const owned = payload.data[0];
+        if (owned) {
+          setActiveLayout(owned);
+          setWidgets(owned.widgets);
+          setNotice("Your D1 monitoring layout is synchronized.");
+        } else if (original) {
+          const template = { ...structuredClone(original), recordVersion: 0 };
+          setActiveLayout(template);
+          setWidgets(template.widgets);
+          setNotice("No saved layout exists yet. Save to create your private D1 layout.");
+        }
+      })
+      .catch((error) => {
+        if (active) setNotice(error instanceof Error ? error.message : "Your monitoring layout could not be loaded.");
+      });
+    return () => { active = false; };
+  }, [auth, original]);
 
   function dropOn(targetId: string) {
     if (!draggedId || draggedId === targetId) return;
@@ -33,22 +62,45 @@ export function MonitoringWall({ layouts }: { layouts: MonitoringLayout[] }) {
     setWidgets((current) => current.map((widget) => widget.id === id ? { ...widget, width: Math.max(3, Math.min(12, widget.width + delta)) } : widget));
   }
 
-  function save() {
-    window.localStorage.setItem("argus-monitoring-wall", JSON.stringify(widgets));
-    setNotice("Monitoring wall saved in local browser storage.");
+  async function save() {
+    if (auth.status !== "authenticated" || !auth.can("layouts:write") || !activeLayout) {
+      window.localStorage.setItem("argus-monitoring-wall", JSON.stringify(widgets));
+      setNotice("Monitoring wall saved in local browser storage. Sign in to synchronize it with D1.");
+      return;
+    }
+    setNotice("Saving your monitoring layout to D1â€¦");
+    try {
+      const response = await auth.authenticatedFetch(`/api/admin/layouts/${encodeURIComponent(activeLayout.id)}`, {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ name: activeLayout.name, widgets, expectedVersion: activeLayout.recordVersion ?? 0 }),
+      });
+      if (!response.ok) {
+        const payload = await response.json() as { error?: { message?: string } };
+        throw new Error(payload.error?.message ?? "The monitoring layout was not accepted.");
+      }
+      const payload = await response.json() as { data: { layout: MonitoringLayout } };
+      setActiveLayout(payload.data.layout);
+      setWidgets(payload.data.layout.widgets);
+      window.localStorage.removeItem("argus-monitoring-wall");
+      setNotice("Monitoring wall saved to your private D1 workspace.");
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "The monitoring layout could not be saved.");
+    }
   }
 
   function reset() {
     setWidgets(original?.widgets ?? []);
     window.localStorage.removeItem("argus-monitoring-wall");
-    setNotice("Monitoring wall restored to the demonstration layout.");
+    if (original) setActiveLayout({ ...structuredClone(original), recordVersion: 0 });
+    setNotice("Monitoring wall restored to the demonstration template. Save to persist the reset.");
   }
 
   return (
     <section className={`${fullScreen ? "fixed inset-0 z-[100] overflow-auto bg-[#05090d] p-3" : "rounded-xl border border-white/10 bg-[#070d13]"}`}>
-      <header className="flex flex-wrap items-center gap-2 border-b border-white/[.08] bg-[#0c141c] p-3"><div className="mr-auto"><p className="text-[9px] uppercase tracking-[.15em] text-cyan-300/70">Multi-monitor workspace</p><h2 className="mt-1 text-sm font-semibold text-slate-200">{original?.name ?? "Monitoring wall"}</h2></div><StatusBadge tone="green">Live mode</StatusBadge><button type="button" className="button" onClick={save}><Save size={13} /> Save layout</button><button type="button" className="button" onClick={reset}><RotateCcw size={13} /> Reset</button><button type="button" className="button" onClick={() => setFullScreen((value) => !value)}>{fullScreen ? <Minimize2 size={13} /> : <Maximize2 size={13} />}{fullScreen ? "Exit operations mode" : "Full-screen operations"}</button></header>
+      <header className="flex flex-wrap items-center gap-2 border-b border-white/[.08] bg-[#0c141c] p-3"><div className="mr-auto"><p className="text-[9px] uppercase tracking-[.15em] text-cyan-300/70">Multi-monitor workspace</p><h2 className="mt-1 text-sm font-semibold text-slate-200">{activeLayout?.name ?? original?.name ?? "Monitoring wall"}</h2></div><StatusBadge tone={activeLayout?.ownerId ? "green" : "cyan"}>{activeLayout?.ownerId ? "D1 synchronized" : "Template mode"}</StatusBadge><button type="button" className="button" onClick={() => void save()}><Save size={13} /> Save layout</button><button type="button" className="button" onClick={reset}><RotateCcw size={13} /> Reset</button><button type="button" className="button" onClick={() => setFullScreen((value) => !value)}>{fullScreen ? <Minimize2 size={13} /> : <Maximize2 size={13} />}{fullScreen ? "Exit operations mode" : "Full-screen operations"}</button></header>
       <div className="grid auto-rows-[70px] grid-cols-1 gap-3 p-3 md:grid-cols-12">{widgets.map((widget) => <article key={widget.id} draggable onDragStart={() => setDraggedId(widget.id)} onDragOver={(event) => event.preventDefault()} onDrop={() => dropOn(widget.id)} className="group relative min-h-[210px] overflow-hidden rounded-lg border border-white/[.09] bg-[#0b141c] shadow-[0_16px_35px_rgba(0,0,0,.22)]" style={{ gridColumn: `span ${Math.min(12, Math.max(3, widget.width))}`, gridRow: `span ${Math.max(3, widget.height)}` }}><header className="flex h-11 items-center gap-2 border-b border-white/[.07] bg-white/[.015] px-3"><Grip size={13} className="cursor-grab text-slate-600" aria-hidden="true" /><p className="min-w-0 flex-1 truncate text-[10px] font-semibold uppercase tracking-[.1em] text-slate-400">{widget.title}</p><span className="text-[8px] uppercase tracking-[.12em] text-slate-700">{titleCase(widget.type)}</span><button type="button" className="icon-button h-7 w-7" aria-label={`Make ${widget.title} smaller`} onClick={() => resize(widget.id, -1)}><Minimize2 size={11} /></button><button type="button" className="icon-button h-7 w-7" aria-label={`Make ${widget.title} larger`} onClick={() => resize(widget.id, 1)}><Expand size={11} /></button></header><WidgetPreview widget={widget} /></article>)}</div>
-      <footer className="flex flex-wrap justify-between gap-2 border-t border-white/[.08] px-4 py-3 text-[9px] text-slate-600"><p role="status">{notice}</p><p>Reusable demonstration layout · drag, resize, save, reset</p></footer>
+      <footer className="flex flex-wrap justify-between gap-2 border-t border-white/[.08] px-4 py-3 text-[9px] text-slate-600"><p role="status">{notice}</p><p>Owner-aware layout · drag, resize, save, reset</p></footer>
     </section>
   );
 }

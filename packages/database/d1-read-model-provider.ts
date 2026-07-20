@@ -27,12 +27,17 @@ export interface D1PreparedStatementLike {
   bind(...values: unknown[]): D1PreparedStatementLike;
   all<T = Record<string, unknown>>(): Promise<{ results?: T[] }>;
   first<T = Record<string, unknown>>(): Promise<T | null>;
-  run(): Promise<unknown>;
+  run(): Promise<D1MutationResultLike>;
+}
+
+export interface D1MutationResultLike {
+  success?: boolean;
+  meta?: { changes?: number };
 }
 
 export interface D1DocumentDatabase {
   prepare(query: string): D1PreparedStatementLike;
-  batch(statements: D1PreparedStatementLike[]): Promise<unknown[]>;
+  batch(statements: D1PreparedStatementLike[]): Promise<D1MutationResultLike[]>;
 }
 
 export const READ_MODEL_COLLECTIONS = {
@@ -59,6 +64,7 @@ export type ReadModelCollection =
 
 interface ReadModelRow {
   document: string | Record<string, unknown>;
+  version: number;
 }
 
 interface SeedRecord {
@@ -76,10 +82,20 @@ interface SeedRecord {
   dataClassification?: string;
 }
 
-function decodeDocument<T>(document: ReadModelRow["document"]): T {
-  return structuredClone(
+function decodeDocument<T>(document: ReadModelRow["document"], version: number): T {
+  const decoded = structuredClone(
     (typeof document === "string" ? JSON.parse(document) : document) as T,
   );
+  if (decoded && typeof decoded === "object" && !Array.isArray(decoded)) {
+    Object.assign(decoded, { recordVersion: version });
+  }
+  return decoded;
+}
+
+export function encodedReadModelDocument(record: SeedRecord): string {
+  const copy = structuredClone(record) as SeedRecord & { recordVersion?: number };
+  delete copy.recordVersion;
+  return JSON.stringify(copy);
 }
 
 function readModelId(collection: ReadModelCollection, recordId: string): string {
@@ -125,7 +141,7 @@ export function prepareReadModelUpsert(
       collection,
       record.id,
       record.slug ?? null,
-      JSON.stringify(record),
+      encodedReadModelDocument(record),
       version,
       sortOrder,
       recordTimestamp(record),
@@ -140,11 +156,11 @@ export async function readModelById<T>(
 ): Promise<T | null> {
   const row = await database
     .prepare(
-      "SELECT document FROM intelligence_read_models WHERE collection = ? AND record_id = ? LIMIT 1",
+      "SELECT document, version FROM intelligence_read_models WHERE collection = ? AND record_id = ? LIMIT 1",
     )
     .bind(collection, recordId)
     .first<ReadModelRow>();
-  return row ? decodeDocument<T>(row.document) : null;
+  return row ? decodeDocument<T>(row.document, row.version) : null;
 }
 
 export async function readModelBySlug<T>(
@@ -154,11 +170,11 @@ export async function readModelBySlug<T>(
 ): Promise<T | null> {
   const row = await database
     .prepare(
-      "SELECT document FROM intelligence_read_models WHERE collection = ? AND slug = ? LIMIT 1",
+      "SELECT document, version FROM intelligence_read_models WHERE collection = ? AND slug = ? LIMIT 1",
     )
     .bind(collection, slug)
     .first<ReadModelRow>();
-  return row ? decodeDocument<T>(row.document) : null;
+  return row ? decodeDocument<T>(row.document, row.version) : null;
 }
 
 export async function readModelCollection<T>(
@@ -167,11 +183,100 @@ export async function readModelCollection<T>(
 ): Promise<T[]> {
   const result = await database
     .prepare(
-      "SELECT document FROM intelligence_read_models WHERE collection = ? ORDER BY sort_order ASC, updated_at DESC, record_id ASC",
+      "SELECT document, version FROM intelligence_read_models WHERE collection = ? ORDER BY sort_order ASC, updated_at DESC, record_id ASC",
     )
     .bind(collection)
     .all<ReadModelRow>();
-  return (result.results ?? []).map((row) => decodeDocument<T>(row.document));
+  return (result.results ?? []).map((row) => decodeDocument<T>(row.document, row.version));
+}
+
+/**
+ * Creates or updates one read model only when the caller still holds the
+ * current D1 revision. Version zero is reserved for inserting a new record.
+ */
+export function prepareVersionedReadModelUpsert(
+  database: D1DocumentDatabase,
+  collection: ReadModelCollection,
+  record: SeedRecord,
+  expectedVersion: number,
+  sortOrder = 0,
+): D1PreparedStatementLike {
+  const document = encodedReadModelDocument(record);
+  return database
+    .prepare(
+      `INSERT INTO intelligence_read_models (
+        id, collection, record_id, slug, document, version, sort_order, updated_at, data_classification
+      )
+      SELECT ?, ?, ?, ?, ?, 1, ?, ?, ?
+      WHERE ? = 0 OR EXISTS (
+        SELECT 1 FROM intelligence_read_models WHERE collection = ? AND record_id = ? AND version = ?
+      )
+      ON CONFLICT(collection, record_id) DO UPDATE SET
+        slug = excluded.slug,
+        document = excluded.document,
+        version = intelligence_read_models.version + 1,
+        sort_order = excluded.sort_order,
+        updated_at = excluded.updated_at,
+        data_classification = excluded.data_classification
+      WHERE intelligence_read_models.version = ?`,
+    )
+    .bind(
+      readModelId(collection, record.id),
+      collection,
+      record.id,
+      record.slug ?? null,
+      document,
+      sortOrder,
+      recordTimestamp(record),
+      record.dataClassification ?? "demonstration",
+      expectedVersion,
+      collection,
+      record.id,
+      expectedVersion,
+      expectedVersion,
+    );
+}
+
+/** Adds a dependent read model only if the preceding target revision landed. */
+export function prepareReadModelUpsertIfCurrent(
+  database: D1DocumentDatabase,
+  dependency: { collection: ReadModelCollection; recordId: string; version: number; document: string },
+  collection: ReadModelCollection,
+  record: SeedRecord,
+  sortOrder = 0,
+): D1PreparedStatementLike {
+  return database
+    .prepare(
+      `INSERT INTO intelligence_read_models (
+        id, collection, record_id, slug, document, version, sort_order, updated_at, data_classification
+      )
+      SELECT ?, ?, ?, ?, ?, 1, ?, ?, ?
+      WHERE EXISTS (
+        SELECT 1 FROM intelligence_read_models
+        WHERE collection = ? AND record_id = ? AND version = ? AND document = ?
+      )
+      ON CONFLICT(collection, record_id) DO UPDATE SET
+        slug = excluded.slug,
+        document = excluded.document,
+        version = intelligence_read_models.version + 1,
+        sort_order = excluded.sort_order,
+        updated_at = excluded.updated_at,
+        data_classification = excluded.data_classification`,
+    )
+    .bind(
+      readModelId(collection, record.id),
+      collection,
+      record.id,
+      record.slug ?? null,
+      encodedReadModelDocument(record),
+      sortOrder,
+      recordTimestamp(record),
+      record.dataClassification ?? "demonstration",
+      dependency.collection,
+      dependency.recordId,
+      dependency.version,
+      dependency.document,
+    );
 }
 
 const DATASET_COLLECTIONS: Array<{

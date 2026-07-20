@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import type { IntelligenceEvent } from "@/packages/shared/types";
 import { ConfidenceMeter, SeverityMark, StatusBadge, buttonClass, formatDate, primaryButtonClass, titleCase } from "@/components/domain/argus-ui";
 import { useAuth } from "@/components/auth/auth-provider";
+import { useRuntimeData } from "@/components/runtime/runtime-data-provider";
 
 type Decision = "confirmed" | "rejected" | "disputed" | "evidence-requested";
 type Queue = "priority" | "low-confidence" | "contradictions" | "duplicates" | "watchlists" | "aether";
@@ -26,6 +27,7 @@ export function ReviewQueue({ events }: { events: IntelligenceEvent[] }) {
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const auth = useAuth();
+  const runtime = useRuntimeData();
 
   const queued = useMemo(() => events.filter((event) => {
     if (decisions[event.id]) return false;
@@ -59,6 +61,7 @@ export function ReviewQueue({ events }: { events: IntelligenceEvent[] }) {
         body: JSON.stringify({
           action,
           eventId: selected.id,
+          expectedVersion: selected.recordVersion,
           ...(action === "confirm" ? {} : { reason: `Decision recorded by ${auth.principal.displayName} through the ARGUS review queue.` }),
         }),
       });
@@ -69,13 +72,14 @@ export function ReviewQueue({ events }: { events: IntelligenceEvent[] }) {
       const payload = (await response.json()) as { data: { auditId: string } };
       setDecisions((current) => ({ ...current, [selected.id]: decision }));
       setNotice(`${selected.title} was durably marked ${decision.replace("-", " ")}. Audit ${payload.data.auditId}.`);
+      runtime.refresh();
       setSelectedIndex((value) => Math.min(value, Math.max(0, queued.length - 2)));
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "The decision could not be recorded.");
     } finally {
       setSubmitting(false);
     }
-  }, [auth, queued.length, selected, submitting]);
+  }, [auth, queued.length, runtime, selected, submitting]);
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {

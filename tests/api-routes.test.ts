@@ -12,8 +12,12 @@ import { GET as search } from "@/app/api/search/route";
 import { POST as askAether } from "@/app/api/aether/route";
 import { POST as review } from "@/app/api/admin/review/route";
 import { POST as runCollector } from "@/app/api/admin/collectors/run/route";
+import { GET as getAuditLog } from "@/app/api/admin/audit/route";
+import { GET as getLayouts } from "@/app/api/admin/layouts/route";
+import { PUT as saveLayout } from "@/app/api/admin/layouts/[id]/route";
 import { seedDemonstrationReadModels } from "@/packages/database/d1-read-model-provider";
 import { demoEvents, demoSources } from "@/packages/shared/demo-data";
+import { demoMonitoringLayouts } from "@/packages/shared/operations-demo-data";
 import { FakeD1Database } from "./helpers/fake-d1";
 
 interface ApiTestPayload {
@@ -127,6 +131,10 @@ describe.sequential("ARGUS API routes", () => {
     expect(relationshipPayload.data.relationships.every((item) => item.analystState === "needs-review")).toBe(true);
     expect(relationshipPayload.meta.warning).toContain("causation");
 
+    const secondRelationshipPage = await body(await getRelationships(new Request("https://argus.example/api/relationships?page=2&limit=2")));
+    expect(secondRelationshipPage.meta?.page).toBe(2);
+    expect((secondRelationshipPage.data as { relationships: unknown[] }).relationships).toHaveLength(2);
+
     const marketResponse = await getMarketImpacts(new Request("https://argus.example/api/market-impacts?minAnomaly=70"));
     const marketPayload = await body(marketResponse) as { data: { assessments: Array<{ marketAnomalyScore: number; causalConfidence: number }> } };
     expect(marketPayload.data.assessments.every((item) => item.marketAnomalyScore >= 70)).toBe(true);
@@ -186,6 +194,41 @@ describe.sequential("ARGUS API routes", () => {
     expect(reviewData.durability).toBe("d1");
     expect(database.auditRows).toHaveLength(1);
     expect(JSON.stringify(payload)).not.toContain(adminToken);
+  });
+
+  it("loads paginated audit history and isolates monitoring layouts by owner", async () => {
+    process.env.ARGUS_ADMIN_TOKEN = adminToken;
+    const database = new FakeD1Database();
+    await seedDemonstrationReadModels(database);
+    const template = demoMonitoringLayouts[0];
+
+    const saveResponse = await saveLayout(
+      new Request(`https://argus.example/api/admin/layouts/${template.id}`, {
+        method: "PUT",
+        headers: { authorization: `Bearer ${adminToken}`, "content-type": "application/json" },
+        body: JSON.stringify({ name: "Private operations wall", widgets: template.widgets, expectedVersion: 0 }),
+      }),
+      { database, adminToken, params: Promise.resolve({ id: template.id }) },
+    );
+    expect(saveResponse.status).toBe(200);
+    const saved = (await body(saveResponse)).data as { layout: { ownerId: string; recordVersion: number } };
+    expect(saved.layout.ownerId).toBe("bootstrap:admin-token");
+    expect(saved.layout.recordVersion).toBe(1);
+
+    const layoutsResponse = await getLayouts(
+      new Request("https://argus.example/api/admin/layouts", { headers: { authorization: `Bearer ${adminToken}` } }),
+      { database, adminToken },
+    );
+    const layouts = (await body(layoutsResponse)).data as Array<{ ownerId?: string; name: string }>;
+    expect(layouts).toEqual([expect.objectContaining({ ownerId: "bootstrap:admin-token", name: "Private operations wall" })]);
+
+    const auditResponse = await getAuditLog(
+      new Request("https://argus.example/api/admin/audit?page=1&limit=1", { headers: { authorization: `Bearer ${adminToken}` } }),
+      { database, adminToken },
+    );
+    const auditPayload = await body(auditResponse);
+    expect((auditPayload.data as Array<{ action: string }>)[0].action).toBe("monitoring-layout-saved");
+    expect(auditPayload.meta?.page).toBe(1);
   });
 
   it("runs only a registered dry-run collector from the admin API", async () => {

@@ -4,6 +4,8 @@ import { StatusBadge, titleCase } from "@/components/domain/argus-ui";
 import { AlertManager } from "@/packages/intelligence/alert-manager";
 import { createBrowserVoiceAlertProvider, playArgusSignalTone } from "@/lib/client/voice-alerts";
 import type { AlertSettings, IntelligenceAlert } from "@/packages/shared/types";
+import { useAuth } from "@/components/auth/auth-provider";
+import { useRuntimeData } from "@/components/runtime/runtime-data-provider";
 
 export function AlertCenter({ alerts, initialSettings }: { alerts: IntelligenceAlert[]; initialSettings: AlertSettings }) {
   const [manager] = useState(() => {
@@ -21,6 +23,9 @@ export function AlertCenter({ alerts, initialSettings }: { alerts: IntelligenceA
   const [notificationsReady, setNotificationsReady] = useState(false);
   const notifiedAlerts = useRef(new Set<string>());
   const provider = useMemo(() => createBrowserVoiceAlertProvider(), []);
+  const auth = useAuth();
+  const runtime = useRuntimeData();
+  const [submittingAlertId, setSubmittingAlertId] = useState<string | null>(null);
 
   useEffect(() => {
     const alert = snapshot.active;
@@ -73,16 +78,43 @@ export function AlertCenter({ alerts, initialSettings }: { alerts: IntelligenceA
     }
   }
 
+  async function recordAction(id: string, action: "acknowledge" | "dismiss") {
+    if (submittingAlertId) return;
+    const alert = alerts.find((candidate) => candidate.id === id);
+    if (!alert) return;
+    if (!auth.principal || !auth.can("alerts:act")) {
+      setCaption("Sign in with the analyst or administrator role to record durable alert actions.");
+      return;
+    }
+    setSubmittingAlertId(id);
+    try {
+      const response = await auth.authenticatedFetch(`/api/admin/alerts/${encodeURIComponent(id)}`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ action, expectedVersion: alert.recordVersion }),
+      });
+      if (!response.ok) {
+        const payload = await response.json() as { error?: { message?: string } };
+        throw new Error(payload.error?.message ?? "The alert action was not accepted.");
+      }
+      if (action === "acknowledge") manager.acknowledge(id);
+      else manager.dismiss(id);
+      setCaption(`${alert.title} ${action === "acknowledge" ? "acknowledged" : "dismissed"} and recorded in D1.`);
+      refresh();
+      runtime.refresh();
+    } catch (error) {
+      setCaption(error instanceof Error ? error.message : "The alert action could not be recorded.");
+    } finally {
+      setSubmittingAlertId(null);
+    }
+  }
+
   function acknowledge() {
-    if (!snapshot.active) return;
-    manager.acknowledge(snapshot.active.id);
-    setCaption(`${snapshot.active.title} acknowledged.`);
-    refresh();
+    if (snapshot.active) void recordAction(snapshot.active.id, "acknowledge");
   }
 
   function dismiss(id: string) {
-    manager.dismiss(id);
-    refresh();
+    void recordAction(id, "dismiss");
   }
 
   async function requestNotifications() {

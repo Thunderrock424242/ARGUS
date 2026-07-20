@@ -138,6 +138,8 @@ export interface IntelligenceEvent {
   reviewerName?: string;
   dataClassification: DemoDataClassification;
   demoDataLabel: string;
+  /** D1 read-model revision supplied by the Worker; absent for bundled fixtures. */
+  recordVersion?: number;
 }
 
 export type ReportProcessingStatus =
@@ -592,6 +594,8 @@ export interface IntelligenceRelationship {
   modelVersion: string;
   dataClassification: DemoDataClassification;
   demoDataLabel: string;
+  /** D1 read-model revision supplied by the Worker; absent for bundled fixtures. */
+  recordVersion?: number;
 }
 
 export interface RelationshipHistoryEntry {
@@ -812,6 +816,8 @@ export interface IntelligenceAlert {
   visualRequired: true;
   dataClassification: DemoDataClassification;
   demoDataLabel: string;
+  /** D1 read-model revision supplied by the Worker; absent for bundled fixtures. */
+  recordVersion?: number;
 }
 
 export interface AlertSettings {
@@ -905,11 +911,14 @@ export interface MonitoringWidget {
 
 export interface MonitoringLayout {
   id: string;
+  ownerId?: string;
   name: string;
   widgets: MonitoringWidget[];
   updatedAt: string;
   dataClassification: DemoDataClassification;
   demoDataLabel: string;
+  /** D1 read-model revision supplied by the Worker; zero denotes an unsaved template. */
+  recordVersion?: number;
 }
 
 export interface IntelligenceDataProvider {

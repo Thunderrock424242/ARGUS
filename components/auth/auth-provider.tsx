@@ -41,6 +41,7 @@ interface AuthContextValue {
   signIn(): Promise<void>;
   signOut(): Promise<void>;
   authenticatedFetch(path: string, init?: RequestInit): Promise<Response>;
+  publicFetch(path: string, init?: RequestInit): Promise<Response>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -250,6 +251,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [apiBaseUrl],
   );
 
+  const publicFetch = useCallback(
+    async (path: string, init: RequestInit = {}) => {
+      if (!apiBaseUrl) throw new Error("The deployed ARGUS Worker is not configured for this site.");
+      const headers = new Headers(init.headers);
+      headers.set("x-request-id", crypto.randomUUID());
+      return fetch(`${apiBaseUrl}${path}`, { ...init, headers });
+    },
+    [apiBaseUrl],
+  );
+
   const signOut = useCallback(async () => {
     try {
       const session = storedSession();
@@ -279,8 +290,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       signIn,
       signOut,
       authenticatedFetch,
+      publicFetch,
     }),
-    [authenticatedFetch, error, principal, signIn, signOut, status],
+    [authenticatedFetch, error, principal, publicFetch, signIn, signOut, status],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

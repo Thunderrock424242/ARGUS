@@ -3,6 +3,7 @@ import { BookmarkPlus, Check, FilePlus2, GitMerge, Pin, RefreshCw, SearchCheck, 
 import { ConfidenceMeter, StatusBadge, titleCase } from "@/components/domain/argus-ui";
 import type { AnalystRelationshipState, IntelligenceGraphNode, IntelligenceRelationship } from "@/packages/shared/types";
 import { useAuth } from "@/components/auth/auth-provider";
+import { useRuntimeData } from "@/components/runtime/runtime-data-provider";
 
 type LocalReview = {
   state: AnalystRelationshipState;
@@ -19,6 +20,7 @@ export function ConsequenceReview({ nodes, relationships }: { nodes: Intelligenc
   const [notice, setNotice] = useState("Review a proposed downstream effect. Local demonstration decisions are non-durable.");
   const [submitting, setSubmitting] = useState(false);
   const auth = useAuth();
+  const runtime = useRuntimeData();
   const selected = candidates.find((relationship) => relationship.id === selectedId);
   const current = selected ? reviews[selected.id] ?? { state: selected.analystState, explanation: selected.explanation, confidence: selected.relationshipConfidence, notes: selected.analystNotes ?? "" } : undefined;
   const nodeById = useMemo(() => new Map(nodes.map((node) => [node.id, node])), [nodes]);
@@ -46,6 +48,7 @@ export function ConsequenceReview({ nodes, relationships }: { nodes: Intelligenc
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           analystState: state,
+          expectedVersion: selected.recordVersion,
           reason: current.notes.trim() || `Relationship marked ${state} through the ARGUS consequence review.`,
           analystNotes: current.notes || undefined,
           relationshipConfidence: current.confidence,
@@ -58,6 +61,7 @@ export function ConsequenceReview({ nodes, relationships }: { nodes: Intelligenc
       const payload = (await response.json()) as { data: { audit: { id: string } } };
       update({ state });
       setNotice(`${selected.id} was durably marked ${state}. Audit ${payload.data.audit.id}.`);
+      runtime.refresh();
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "The relationship decision could not be recorded.");
     } finally {

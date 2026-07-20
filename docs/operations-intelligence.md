@@ -76,7 +76,7 @@ The D1 schema includes graph nodes, relationships, relationship history, impact 
 
 - Reports, prices, conflicts, cameras, alerts, and history are stored fictional snapshots, not live providers.
 - The Global Operations View has 3D globe and flat-map modes, but no terrain/elevation source is configured.
-- Public browser review controls are local; durable D1 review endpoints require a trusted administrative client.
+- Authenticated review, consequence, alert, audit, and monitoring-layout controls synchronize through the Worker and D1. Unsigned or unavailable-Worker sessions retain visibly labeled fixture behavior.
 - Browser speech quality and voice availability depend on the operating system.
 - Camera entries demonstrate permission handling and do not embed real feeds.
 - Monitoring-wall layouts persist locally in the public UI; the D1 layout endpoint is reserved for authenticated clients.

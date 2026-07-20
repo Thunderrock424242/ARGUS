@@ -6,13 +6,16 @@ import type { PlatformMetrics } from "@/packages/shared/types";
 export async function GET(request: Request): Promise<Response> {
   const requestId = requestIdFrom(request);
   try {
-    const [events, reports, sources, relationships, graphNodes, marketImpacts, alerts] = await Promise.all([
+    const [events, reports, sources, relationships, graphNodes, relationshipHistory, marketAssets, marketImpacts, stateHistory, alerts] = await Promise.all([
       intelligenceDataProvider.getEvents(),
       intelligenceDataProvider.getReports(),
       intelligenceDataProvider.getSources(),
       intelligenceDataProvider.getRelationships(),
       intelligenceDataProvider.getGraphNodes(),
+      intelligenceDataProvider.getRelationshipHistory(),
+      intelligenceDataProvider.getMarketAssets(),
       intelligenceDataProvider.getMarketImpacts(),
+      intelligenceDataProvider.getStateHistory(),
       intelligenceDataProvider.getAlerts(),
     ]);
     const metrics: PlatformMetrics = {
@@ -35,7 +38,7 @@ export async function GET(request: Request): Promise<Response> {
       ...report,
       rawPayload: { redacted: true },
     }));
-    return jsonData({ events, reports: safeReports, sources, relationships, graphNodes, marketImpacts, alerts, metrics }, { meta: { requestId, dataClassification: "demonstration", source: "runtime-provider" } });
+    return jsonData({ events, reports: safeReports, sources, relationships, graphNodes, relationshipHistory, marketAssets, marketImpacts, stateHistory, alerts, metrics }, { meta: { requestId, dataClassification: "demonstration", source: "runtime-provider" } });
   } catch {
     return jsonError(503, "operations_snapshot_unavailable", "The operations snapshot is temporarily unavailable.", { requestId });
   }

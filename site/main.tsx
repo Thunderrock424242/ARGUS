@@ -11,6 +11,7 @@ import Loading from "@/app/loading";
 import "@/app/globals.css";
 import { AppShell } from "@/components/shell/app-shell";
 import { AuthProvider } from "@/components/auth/auth-provider";
+import { RuntimeDataProvider } from "@/components/runtime/runtime-data-provider";
 
 const AetherPage = lazy(() => import("@/app/aether/page"));
 const AlertsPage = lazy(() => import("@/app/alerts/page"));
@@ -121,9 +122,11 @@ if (!root) throw new Error("ARGUS root element is missing.");
 createRoot(root).render(
   <StrictMode>
     <AuthProvider>
-      <BrowserRouter basename={basename}>
-        <ArgusRoutes />
-      </BrowserRouter>
+      <RuntimeDataProvider>
+        <BrowserRouter basename={basename}>
+          <ArgusRoutes />
+        </BrowserRouter>
+      </RuntimeDataProvider>
     </AuthProvider>
   </StrictMode>,
 );

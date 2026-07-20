@@ -1,8 +1,10 @@
 import { POST as askAether } from "@/app/api/aether/route";
 import { POST as actOnAlert } from "@/app/api/admin/alerts/[id]/route";
+import { GET as getAuditLog } from "@/app/api/admin/audit/route";
 import { POST as seedDemoData } from "@/app/api/admin/demo-seed/route";
 import { POST as runCollector } from "@/app/api/admin/collectors/run/route";
 import { PUT as saveLayout } from "@/app/api/admin/layouts/[id]/route";
+import { GET as getLayouts } from "@/app/api/admin/layouts/route";
 import { POST as reviewRelationship } from "@/app/api/admin/relationships/[id]/route";
 import { POST as enforceRetention } from "@/app/api/admin/retention/route";
 import { POST as reviewEvent } from "@/app/api/admin/review/route";
@@ -157,6 +159,12 @@ async function route(request: Request, env: BrainEnv): Promise<Response> {
   }
   if (request.method === "GET" && pathname === "/api/admin/users") {
     return listUsers(request, adminContext);
+  }
+  if (request.method === "GET" && pathname === "/api/admin/audit") {
+    return getAuditLog(request, adminContext);
+  }
+  if (request.method === "GET" && pathname === "/api/admin/layouts") {
+    return getLayouts(request, adminContext);
   }
   const userRolesMatch = pathname.match(/^\/api\/admin\/users\/([^/]+)\/roles$/);
   if (request.method === "PUT" && userRolesMatch) {

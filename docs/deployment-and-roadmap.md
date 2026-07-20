@@ -26,7 +26,7 @@ For production monitoring, deploy the collector scheduler/queue separately from 
 ## Current limitations
 
 - The GitHub Pages interface remains usable if the Worker is unavailable, but remote API features fall back to bundled demonstration behavior.
-- GitHub OAuth, PKCE, stable analyst IDs, D1 sessions, role checks, audited role assignment, and browser review writes are implemented; the live deployment still requires the OAuth App, secrets, migration, and Worker rollout.
+- GitHub OAuth, PKCE, stable analyst IDs, D1 sessions, role checks, audited role assignment, and browser review writes are implemented and configured on the public deployment. New deployments still require the documented one-time OAuth and administrator bootstrap.
 - The admin bearer token remains bootstrap/recovery access and must be rotated and kept out of ordinary browser use.
 - Protected-route and sign-in rate limits use D1 counters; higher-volume deployments should evaluate a Durable Object or gateway limiter.
 - Administrative collector runs are deliberately dry-run and do not persist reports.
@@ -37,19 +37,19 @@ For production monitoring, deploy the collector scheduler/queue separately from 
 - Aether is deterministic and has no live AI provider.
 - The relationship, market, conflict, alert, camera, and playback datasets are fictional stored snapshots; no live provider is connected.
 - The map supports globe and flat projections but has no terrain/elevation provider.
-- Voice quality depends on browser SpeechSynthesis, and the public monitoring-wall UI remains browser-local pending owner-aware save/load integration.
+- Voice quality depends on browser SpeechSynthesis. Monitoring-wall layouts now use owner-aware D1 save/load for authenticated analysts and retain local storage only as an unsigned fallback.
 - Map accuracy is limited to fixture coordinates; precision/provenance is not yet modeled.
 - Browser notifications, report export, retention automation, and durable review/correction endpoints are implemented; broader backup/export and deletion workflows remain.
 
 ## Recommended next phases
 
-### 1. Complete normalized durability
+### 1. Complete normalized durability — browser loop implemented
 
-The D1 read-model provider, contract tests, versioned writes, audit batches, retention, and explicit seed now exist. Next, add cursor pagination and make normalized evidence/report tables authoritative during live ingestion rather than relying on materialized documents alone.
+The D1 read-model provider, contract tests, versioned writes, optimistic conflict rejection, audit batches, protected audit pagination, owner-aware layouts, browser readback, retention, and explicit seed now exist. Events and relationships expose bounded page/limit pagination. Next, add cursor pagination for ingestion-scale collections and make normalized evidence/report tables authoritative during live ingestion rather than relying on materialized documents alone.
 
-### 2. Identity and roles — implemented, deployment setup pending
+### 2. Identity and roles — implemented and deployed
 
-GitHub OAuth with PKCE, stable analyst IDs, hashed D1 sessions, role checks, browser review writes, role-aware audits, last-administrator protection, and D1 rate limiting are implemented. Complete the one-time OAuth configuration in `docs/identity-and-roles.md`; retain the shared bearer only for bootstrap and recovery.
+GitHub OAuth with PKCE, stable analyst IDs, hashed D1 sessions, role checks, browser review writes, role-aware audits, last-administrator protection, and D1 rate limiting are implemented and live. Retain the shared bearer only for bootstrap and recovery.
 
 ### 3. Hardened ingestion runtime
 

@@ -1,12 +1,15 @@
 import { createAuditEntry } from "@/lib/audit/recorder";
 import type { ReviewRequest } from "@/lib/admin/review";
 import {
-  prepareReadModelUpsert,
+  encodedReadModelDocument,
+  prepareReadModelUpsertIfCurrent,
+  prepareVersionedReadModelUpsert,
   readModelById,
   READ_MODEL_COLLECTIONS,
   seedDemonstrationReadModels,
   type D1DocumentDatabase,
   type D1PreparedStatementLike,
+  type D1MutationResultLike,
   type ReadModelCollection,
 } from "@/packages/database/d1-read-model-provider";
 import type {
@@ -62,6 +65,82 @@ function auditInsert(
     );
 }
 
+interface VersionDependency {
+  collection: ReadModelCollection;
+  recordId: string;
+  version: number;
+  document: string;
+}
+
+function versionDependency(
+  collection: ReadModelCollection,
+  record: { id: string; recordVersion?: number; dataClassification?: string },
+): VersionDependency {
+  if (!record.recordVersion) {
+    throw new DurableOperationError(503, "version_unavailable", "The D1 read-model version is unavailable.");
+  }
+  return {
+    collection,
+    recordId: record.id,
+    version: record.recordVersion,
+    document: encodedReadModelDocument(record),
+  };
+}
+
+function auditInsertIfCurrent(
+  database: D1DocumentDatabase,
+  entry: AuditLogEntry,
+  dependency: VersionDependency,
+): D1PreparedStatementLike {
+  return database
+    .prepare(
+      `INSERT INTO audit_logs (
+        id, occurred_at, actor_type, actor_id, actor_name, action,
+        target_type, target_id, summary, before, after, reason,
+        correlation_id, data_classification
+      )
+      SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+      WHERE EXISTS (
+        SELECT 1 FROM intelligence_read_models
+        WHERE collection = ? AND record_id = ? AND version = ? AND document = ?
+      )`,
+    )
+    .bind(
+      entry.id,
+      entry.occurredAt,
+      entry.actorType,
+      entry.actorId,
+      entry.actorName,
+      entry.action,
+      entry.targetType,
+      entry.targetId,
+      entry.summary,
+      entry.before === undefined ? null : JSON.stringify(entry.before),
+      entry.after === undefined ? null : JSON.stringify(entry.after),
+      entry.reason ?? null,
+      entry.correlationId,
+      entry.dataClassification,
+      dependency.collection,
+      dependency.recordId,
+      dependency.version,
+      dependency.document,
+    );
+}
+
+function mutationChanges(result: D1MutationResultLike | undefined): number {
+  return result?.meta?.changes ?? 0;
+}
+
+function assertVersionedWrite(result: D1MutationResultLike | undefined): void {
+  if (mutationChanges(result) !== 1) {
+    throw new DurableOperationError(
+      409,
+      "stale_version",
+      "This record changed after it was loaded. Refresh ARGUS and review the latest version before trying again.",
+    );
+  }
+}
+
 function appendNote(existing: string | undefined, note: string): string {
   return [existing?.trim(), note.trim()].filter(Boolean).join("\n\n");
 }
@@ -106,6 +185,10 @@ export async function applyEventReview(
   );
   if (!event) {
     throw new DurableOperationError(404, "event_not_found", "The target event does not exist in D1.");
+  }
+  const currentVersion = event.recordVersion ?? 1;
+  if (request.expectedVersion !== undefined && request.expectedVersion !== currentVersion) {
+    throw new DurableOperationError(409, "stale_version", "The event changed after it was loaded. Refresh before reviewing it.");
   }
   const before = structuredClone(event);
 
@@ -188,6 +271,7 @@ export async function applyEventReview(
   event.lastUpdatedAt = occurredAt;
   event.reviewedAt = occurredAt;
   event.reviewerName = request.reviewerName;
+  event.recordVersion = currentVersion + 1;
 
   const audit = createAuditEntry({
     action:
@@ -235,15 +319,18 @@ export async function recordDurableEventReview(
   actorId?: string,
 ): Promise<{ event: IntelligenceEvent; audit: AuditLogEntry; stateChange: IntelligenceStateChange }> {
   const result = await applyEventReview(database, request, requestId, new Date().toISOString(), actorId);
-  await database.batch([
-    prepareReadModelUpsert(database, READ_MODEL_COLLECTIONS.events, result.event),
-    prepareReadModelUpsert(database, READ_MODEL_COLLECTIONS.stateHistory, result.stateChange),
-    auditInsert(database, result.audit),
+  const dependency = versionDependency(READ_MODEL_COLLECTIONS.events, result.event);
+  const writes = await database.batch([
+    prepareVersionedReadModelUpsert(database, READ_MODEL_COLLECTIONS.events, result.event, dependency.version - 1),
+    prepareReadModelUpsertIfCurrent(database, dependency, READ_MODEL_COLLECTIONS.stateHistory, result.stateChange),
+    auditInsertIfCurrent(database, result.audit, dependency),
   ]);
+  assertVersionedWrite(writes[0]);
   return result;
 }
 
 export interface RelationshipReviewInput {
+  expectedVersion?: number;
   analystState: Exclude<AnalystRelationshipState, "automated">;
   reviewerName: string;
   reason: string;
@@ -268,6 +355,10 @@ export async function recordDurableRelationshipReview(
   if (!relationship) {
     throw new DurableOperationError(404, "relationship_not_found", "The relationship does not exist in D1.");
   }
+  const currentVersion = relationship.recordVersion ?? 1;
+  if (input.expectedVersion !== undefined && input.expectedVersion !== currentVersion) {
+    throw new DurableOperationError(409, "stale_version", "The relationship changed after it was loaded. Refresh before reviewing it.");
+  }
   const before = structuredClone(relationship);
   const occurredAt = new Date().toISOString();
   relationship.analystState = input.analystState;
@@ -278,6 +369,7 @@ export async function recordDurableRelationshipReview(
   relationship.lastRecalculatedAt = occurredAt;
   if (input.analystState === "rejected") relationship.relationshipType = "analyst-rejected";
   if (input.analystState === "disputed") relationship.relationshipType = "disputed";
+  relationship.recordVersion = currentVersion + 1;
 
   const history: RelationshipHistoryEntry = {
     id: `rel-history-${crypto.randomUUID()}`,
@@ -312,11 +404,13 @@ export async function recordDurableRelationshipReview(
     reason: input.reason,
     occurredAt,
   });
-  await database.batch([
-    prepareReadModelUpsert(database, READ_MODEL_COLLECTIONS.relationships, relationship),
-    prepareReadModelUpsert(database, READ_MODEL_COLLECTIONS.relationshipHistory, history),
-    auditInsert(database, audit),
+  const dependency = versionDependency(READ_MODEL_COLLECTIONS.relationships, relationship);
+  const writes = await database.batch([
+    prepareVersionedReadModelUpsert(database, READ_MODEL_COLLECTIONS.relationships, relationship, dependency.version - 1),
+    prepareReadModelUpsertIfCurrent(database, dependency, READ_MODEL_COLLECTIONS.relationshipHistory, history),
+    auditInsertIfCurrent(database, audit, dependency),
   ]);
+  assertVersionedWrite(writes[0]);
   return { relationship, history, audit };
 }
 
@@ -333,7 +427,12 @@ export async function saveDurableMonitoringLayout(
     READ_MODEL_COLLECTIONS.monitoringLayouts,
     layout.id,
   );
-  const updated = { ...structuredClone(layout), updatedAt: occurredAt };
+  const currentVersion = before?.recordVersion ?? 0;
+  const expectedVersion = layout.recordVersion ?? currentVersion;
+  if (expectedVersion !== currentVersion) {
+    throw new DurableOperationError(409, "stale_version", "The monitoring layout changed after it was loaded. Refresh before saving it.");
+  }
+  const updated = { ...structuredClone(layout), updatedAt: occurredAt, recordVersion: currentVersion + 1 };
   const audit = createAuditEntry({
     action: "monitoring-layout-saved",
     targetType: "monitoring-layout",
@@ -346,10 +445,12 @@ export async function saveDurableMonitoringLayout(
     after: updated,
     occurredAt,
   });
-  await database.batch([
-    prepareReadModelUpsert(database, READ_MODEL_COLLECTIONS.monitoringLayouts, updated),
-    auditInsert(database, audit),
+  const dependency = versionDependency(READ_MODEL_COLLECTIONS.monitoringLayouts, updated);
+  const writes = await database.batch([
+    prepareVersionedReadModelUpsert(database, READ_MODEL_COLLECTIONS.monitoringLayouts, updated, currentVersion),
+    auditInsertIfCurrent(database, audit, dependency),
   ]);
+  assertVersionedWrite(writes[0]);
   return { layout: updated, audit };
 }
 
@@ -360,6 +461,7 @@ export async function recordDurableAlertAction(
   reviewerName: string,
   requestId: string,
   actorId?: string,
+  expectedVersion?: number,
 ): Promise<{ alert: IntelligenceAlert; audit: AuditLogEntry }> {
   const alert = await readModelById<IntelligenceAlert>(
     database,
@@ -367,6 +469,10 @@ export async function recordDurableAlertAction(
     alertId,
   );
   if (!alert) throw new DurableOperationError(404, "alert_not_found", "The alert does not exist in D1.");
+  const currentVersion = alert.recordVersion ?? 1;
+  if (expectedVersion !== undefined && expectedVersion !== currentVersion) {
+    throw new DurableOperationError(409, "stale_version", "The alert changed after it was loaded. Refresh before acting on it.");
+  }
   if (alert.state === "acknowledged" || alert.state === "dismissed") {
     throw new DurableOperationError(409, "alert_already_resolved", "The alert has already been resolved.");
   }
@@ -375,6 +481,7 @@ export async function recordDurableAlertAction(
   alert.state = action === "acknowledge" ? "acknowledged" : "dismissed";
   if (action === "acknowledge") alert.acknowledgedAt = occurredAt;
   else alert.dismissedAt = occurredAt;
+  alert.recordVersion = currentVersion + 1;
   const audit = createAuditEntry({
     action: action === "acknowledge" ? "alert-acknowledged" : "alert-dismissed",
     targetType: "alert",
@@ -387,10 +494,12 @@ export async function recordDurableAlertAction(
     after: alert,
     occurredAt,
   });
-  await database.batch([
-    prepareReadModelUpsert(database, READ_MODEL_COLLECTIONS.alerts, alert),
-    auditInsert(database, audit),
+  const dependency = versionDependency(READ_MODEL_COLLECTIONS.alerts, alert);
+  const writes = await database.batch([
+    prepareVersionedReadModelUpsert(database, READ_MODEL_COLLECTIONS.alerts, alert, currentVersion),
+    auditInsertIfCurrent(database, audit, dependency),
   ]);
+  assertVersionedWrite(writes[0]);
   return { alert, audit };
 }
 

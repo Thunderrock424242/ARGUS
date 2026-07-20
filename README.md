@@ -19,7 +19,7 @@ The public demonstration is published at [thunderrock424242.github.io/ARGUS](htt
 - 24 fictional events, 60+ reports, 15 sources, 10 watchlists, and 5 briefs
 - Rule-based duplicate detection, event correlation, claim extraction, contradiction checks, and confidence scoring
 - Network-free development collectors for RSS/Atom, USGS, NASA EONET, GDACS, ReliefWeb, NWS, CISA KEV, and GDELT
-- Read APIs plus disabled-by-default, token-protected D1 administrative review, layout, alert, seed, and retention routes
+- Paginated read APIs plus identity-protected D1 review, audit, owner-layout, alert, seed, and retention routes
 - A versioned D1 read-model provider, durable audit path, Drizzle schema, and migrations
 - Vitest coverage for the intelligence core and API security boundaries
 
@@ -67,9 +67,9 @@ The Pages workflow pins the public `https://argus-brain.thunderrock-labs.workers
 
 ## Identity and administrative API safety
 
-The Worker supports GitHub OAuth with PKCE, hashed short-lived D1 sessions, stable user IDs, explicit roles, and D1-backed rate limits. New identities receive `viewer`; reviewer, source-manager, and administrator permissions are granted through the audited role API. See [Identity and roles](docs/identity-and-roles.md) for setup.
+The Worker supports GitHub OAuth with PKCE, hashed short-lived D1 sessions, stable user IDs, explicit roles, and D1-backed rate limits. New identities receive `viewer`; reviewer, source-manager, and administrator permissions are granted through the audited role API. The public deployment has completed this bootstrap, while each additional deployment must follow [Identity and roles](docs/identity-and-roles.md).
 
-Event reviews, relationship reviews, alert actions, monitoring layouts, read-model seeding, and retention operate on versioned D1 documents and append audit/history records. The browser sends only a short-lived ARGUS session; GitHub and bootstrap secrets never enter the Pages bundle. `ARGUS_ADMIN_TOKEN` remains command-line bootstrap/recovery access and must never be placed in `VITE_`, a URL, a committed file, a log, or a browser response. Administrative collector requests remain `dry-run`; they cannot turn on network collection.
+Event reviews, relationship reviews, alert actions, monitoring layouts, read-model seeding, and retention operate on versioned D1 documents and append audit/history records. The review, dossier, consequence, alert, and monitoring-wall views read those stored results back through the Worker. Mutable actions carry the loaded D1 revision and reject stale edits instead of silently overwriting newer work; layouts are scoped to the stable signed-in owner ID. The browser sends only a short-lived ARGUS session; GitHub and bootstrap secrets never enter the Pages bundle. `ARGUS_ADMIN_TOKEN` remains command-line bootstrap/recovery access and must never be placed in `VITE_`, a URL, a committed file, a log, or a browser response. Administrative collector requests remain `dry-run`; they cannot turn on network collection.
 
 ## Public Worker endpoints
 
@@ -91,7 +91,7 @@ Event reviews, relationship reviews, alert actions, monitoring layouts, read-mod
 
 Identity endpoints include `GET /api/auth/config`, `POST /api/auth/exchange`, `GET /api/auth/session`, and `POST /api/auth/logout`. Protected Worker endpoints include event and relationship review, alert and layout actions, dry-run collector execution, demonstration seeding, retention, user listing, and role assignment.
 
-These endpoints run under `npm run brain:dev` and are hosted by the standalone Worker, not at the GitHub Pages origin. All API responses are `no-store`, carry a request ID, redact credential-shaped fields, and label fictional data. Unknown query and body fields are rejected. Administrative handlers require both explicit server configuration and authorization.
+These endpoints run under `npm run brain:dev` and are hosted by the standalone Worker, not at the GitHub Pages origin. Protected reads also include `GET /api/admin/audit` and `GET /api/admin/layouts`. All API responses are `no-store`, carry a request ID, redact credential-shaped fields, and label fictional data. Unknown query and body fields are rejected. Administrative handlers require both explicit server configuration and authorization.
 
 ## Documentation
 

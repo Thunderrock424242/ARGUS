@@ -19,7 +19,9 @@ ARGUS is organized around one central distinction: a **source report** is a sing
 | Server policy | `lib/` | API validation, safe responses, admin auth, URL rules, rate limits, audit adapters |
 | Public brain | `worker/index.ts` | Standalone read/Aether routing, D1 selection, GitHub Pages CORS, protected administration, and scheduled retention |
 
-The API depends on `IntelligenceDataProvider`, not on fixture arrays or Drizzle queries directly. Route modules hold a stable delegating provider reference; the Worker points it at D1 before dispatch when `DB` exists, otherwise it resets to immutable fixtures. The Global Operations browser view hydrates from `/api/operations/snapshot` and keeps its bundled fallback when the Worker is unavailable.
+The API depends on `IntelligenceDataProvider`, not on fixture arrays or Drizzle queries directly. Route modules hold a stable delegating provider reference; the Worker points it at D1 before dispatch when `DB` exists, otherwise it resets to immutable fixtures. A shared browser runtime provider hydrates events, reports, sources, relationships, histories, market data, and alerts from `/api/operations/snapshot`, then loads protected audit history for authorized reviewers. It keeps the bundled fallback when the Worker is unavailable.
+
+Mutable read models expose their D1 `recordVersion` as response metadata inside the typed document while stripping it before JSON persistence. Review, relationship, alert, and layout writes require the loaded revision when supplied and use conditional versioned updates so stale browser state returns `409`. Monitoring layouts are prefixed and filtered by the authenticated stable owner ID.
 
 ## Request flow
 

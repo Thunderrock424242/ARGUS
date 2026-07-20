@@ -1,5 +1,6 @@
 import type {
   D1DocumentDatabase,
+  D1MutationResultLike,
   D1PreparedStatementLike,
 } from "@/packages/database/d1-read-model-provider";
 
@@ -53,12 +54,29 @@ class FakeD1Statement implements D1PreparedStatementLike {
 
   async all<T>(): Promise<{ results?: T[] }> {
     const normalized = this.query.toLocaleLowerCase("en-US");
+    if (normalized.includes("from audit_logs")) {
+      const filtered = normalized.includes("where target_id = ?")
+        ? this.database.auditRows.filter((row) => row[7] === this.values[0])
+        : [...this.database.auditRows];
+      const limitIndex = normalized.includes("where target_id = ?") ? 1 : 0;
+      const limit = Number(this.values[limitIndex]);
+      const offset = Number(this.values[limitIndex + 1]);
+      const rows = filtered
+        .sort((left, right) => String(right[1]).localeCompare(String(left[1])) || String(right[0]).localeCompare(String(left[0])))
+        .slice(offset, offset + limit)
+        .map((row) => ({
+          id: row[0], occurred_at: row[1], actor_type: row[2], actor_id: row[3], actor_name: row[4], action: row[5],
+          target_type: row[6], target_id: row[7], summary: row[8], before: row[9], after: row[10], reason: row[11],
+          correlation_id: row[12], data_classification: row[13],
+        })) as T[];
+      return { results: rows };
+    }
     if (normalized.includes("from intelligence_read_models") && normalized.includes("collection = ?")) {
       const [collection] = this.values as [string];
       const rows = [...this.database.readModels.values()]
         .filter((row) => row.collection === collection)
         .sort((left, right) => left.sortOrder - right.sortOrder || right.updatedAt.localeCompare(left.updatedAt) || left.recordId.localeCompare(right.recordId))
-        .map((row) => ({ document: row.document })) as T[];
+        .map((row) => ({ document: row.document, version: row.version })) as T[];
       return { results: rows };
     }
     if (normalized.includes("from auth_users u")) {
@@ -120,11 +138,50 @@ class FakeD1Statement implements D1PreparedStatementLike {
         ? candidate.recordId === identifier
         : candidate.slug === identifier),
     );
-    return row ? ({ document: row.document } as T) : null;
+    return row ? ({ document: row.document, version: row.version } as T) : null;
   }
 
-  async run(): Promise<unknown> {
+  async run(): Promise<D1MutationResultLike> {
     const normalized = this.query.trim().toLocaleLowerCase("en-US");
+    if (normalized.startsWith("insert into intelligence_read_models") && normalized.includes("where ? = 0 or exists")) {
+      const [id, collection, recordId, slug, document, sortOrder, updatedAt, dataClassification, expectedVersion, dependencyCollection, dependencyRecordId, dependencyVersion, updateExpectedVersion] = this.values as [string, string, string, string | null, string, number, string, string, number, string, string, number, number];
+      const key = `${collection}:${recordId}`;
+      const existing = this.database.readModels.get(key);
+      const dependency = this.database.readModels.get(`${dependencyCollection}:${dependencyRecordId}`);
+      if (expectedVersion !== 0 && dependency?.version !== dependencyVersion) return { meta: { changes: 0 } };
+      if (existing && existing.version !== updateExpectedVersion) return { meta: { changes: 0 } };
+      this.database.readModels.set(key, {
+        id,
+        collection,
+        recordId,
+        slug,
+        document,
+        version: existing ? existing.version + 1 : 1,
+        sortOrder,
+        updatedAt,
+        dataClassification,
+      });
+      return { meta: { changes: 1 } };
+    }
+    if (normalized.startsWith("insert into intelligence_read_models") && normalized.includes("where exists")) {
+      const [id, collection, recordId, slug, document, sortOrder, updatedAt, dataClassification, dependencyCollection, dependencyRecordId, dependencyVersion, dependencyDocument] = this.values as [string, string, string, string | null, string, number, string, string, string, string, number, string];
+      const dependency = this.database.readModels.get(`${dependencyCollection}:${dependencyRecordId}`);
+      if (dependency?.version !== dependencyVersion || dependency.document !== dependencyDocument) return { meta: { changes: 0 } };
+      const key = `${collection}:${recordId}`;
+      const existing = this.database.readModels.get(key);
+      this.database.readModels.set(key, {
+        id,
+        collection,
+        recordId,
+        slug,
+        document,
+        version: existing ? existing.version + 1 : 1,
+        sortOrder,
+        updatedAt,
+        dataClassification,
+      });
+      return { meta: { changes: 1 } };
+    }
     if (normalized.startsWith("insert into intelligence_read_models")) {
       const [id, collection, recordId, slug, document, version, sortOrder, updatedAt, dataClassification] = this.values as [string, string, string, string | null, string, number, number, string, string];
       const key = `${collection}:${recordId}`;
@@ -143,7 +200,12 @@ class FakeD1Statement implements D1PreparedStatementLike {
       return { meta: { changes: 1 } };
     }
     if (normalized.startsWith("insert into audit_logs")) {
-      this.database.auditRows.push([...this.values]);
+      if (normalized.includes("where exists")) {
+        const [dependencyCollection, dependencyRecordId, dependencyVersion, dependencyDocument] = this.values.slice(14) as [string, string, number, string];
+        const dependency = this.database.readModels.get(`${dependencyCollection}:${dependencyRecordId}`);
+        if (dependency?.version !== dependencyVersion || dependency.document !== dependencyDocument) return { meta: { changes: 0 } };
+      }
+      this.database.auditRows.push(this.values.slice(0, 14));
       return { meta: { changes: 1 } };
     }
     if (normalized.startsWith("insert into auth_users")) {
@@ -234,8 +296,8 @@ export class FakeD1Database implements D1DocumentDatabase {
     return new FakeD1Statement(this, query);
   }
 
-  async batch(statements: D1PreparedStatementLike[]): Promise<unknown[]> {
-    const results: unknown[] = [];
+  async batch(statements: D1PreparedStatementLike[]): Promise<D1MutationResultLike[]> {
+    const results: D1MutationResultLike[] = [];
     for (const statement of statements) results.push(await statement.run());
     return results;
   }

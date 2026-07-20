@@ -23,7 +23,18 @@ export async function PUT(request: Request, context: LayoutRouteContext): Promis
   if (!body.success) return jsonError(body.status, body.code, body.message, { details: body.details, requestId, headers: guard.rateLimitHeaders });
   try {
     const actor = actorForRequest(guard.principal, body.data.reviewerName);
-    const result = await saveDurableMonitoringLayout(context.database, { id: id.data, name: body.data.name, widgets: body.data.widgets, updatedAt: new Date().toISOString(), dataClassification: "demonstration", demoDataLabel: DEMONSTRATION_DATA_LABEL }, actor.name, requestId, actor.id);
+    const ownerPrefix = `${guard.principal.id}:`;
+    const ownedId = id.data.startsWith(ownerPrefix) ? id.data : `${ownerPrefix}${id.data}`;
+    const result = await saveDurableMonitoringLayout(context.database, {
+      id: ownedId,
+      ownerId: guard.principal.id,
+      name: body.data.name,
+      widgets: body.data.widgets,
+      updatedAt: new Date().toISOString(),
+      dataClassification: "demonstration",
+      demoDataLabel: DEMONSTRATION_DATA_LABEL,
+      recordVersion: body.data.expectedVersion,
+    }, actor.name, requestId, actor.id);
     return jsonData({ ...result, durability: "d1" }, { headers: guard.rateLimitHeaders, meta: { requestId } });
   } catch {
     return jsonError(503, "layout_save_failed", "The monitoring layout could not be persisted.", { requestId, headers: guard.rateLimitHeaders });

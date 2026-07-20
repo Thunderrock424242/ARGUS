@@ -120,6 +120,7 @@ export const searchQuerySchema = z
 export const routeIdentifierSchema = z.string().trim().min(1).max(160).regex(/^[a-zA-Z0-9][a-zA-Z0-9._:-]*$/);
 
 export const relationshipsQuerySchema = z.object({
+  page: pageSchema,
   minConfidence: z.coerce.number().int().min(0).max(100).default(0),
   analystState: z.enum(["automated", "needs-review", "confirmed", "rejected", "disputed"]).optional(),
   relationshipType: z.enum(["confirmed-impact", "likely-impact", "possible-impact", "correlated-movement", "exposure-only", "hypothesized-consequence", "triggered-response", "escalated", "deescalated", "disrupted", "related-event", "disputed", "analyst-rejected"]).optional(),
@@ -137,6 +138,7 @@ export const marketImpactsQuerySchema = z.object({
 const analystNameSchema = z.string().trim().min(1).max(100);
 
 export const relationshipReviewRequestSchema = z.object({
+  expectedVersion: z.number().int().min(1).optional(),
   analystState: z.enum(["needs-review", "confirmed", "rejected", "disputed"]),
   reviewerName: analystNameSchema.default("Deployment Operator"),
   reason: z.string().trim().min(3).max(2_000),
@@ -158,6 +160,7 @@ const monitoringWidgetSchema = z.object({
 }).strict();
 
 export const monitoringLayoutSaveSchema = z.object({
+  expectedVersion: z.number().int().min(0).optional(),
   reviewerName: analystNameSchema.default("Deployment Operator"),
   name: z.string().trim().min(1).max(120),
   widgets: z.array(monitoringWidgetSchema).max(60),
@@ -165,7 +168,14 @@ export const monitoringLayoutSaveSchema = z.object({
 
 export const alertActionRequestSchema = z.object({
   action: z.enum(["acknowledge", "dismiss"]),
+  expectedVersion: z.number().int().min(1).optional(),
   reviewerName: analystNameSchema.default("Deployment Operator"),
+}).strict();
+
+export const auditLogQuerySchema = z.object({
+  page: pageSchema,
+  limit: z.coerce.number().int().min(1).max(100).default(25),
+  targetId: routeIdentifierSchema.optional(),
 }).strict();
 
 export const demoSeedRequestSchema = z.object({

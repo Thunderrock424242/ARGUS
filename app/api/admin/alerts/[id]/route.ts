@@ -22,7 +22,7 @@ export async function POST(request: Request, context: AlertRouteContext): Promis
   if (!body.success) return jsonError(body.status, body.code, body.message, { details: body.details, requestId, headers: guard.rateLimitHeaders });
   try {
     const actor = actorForRequest(guard.principal, body.data.reviewerName);
-    const result = await recordDurableAlertAction(context.database, id.data, body.data.action, actor.name, requestId, actor.id);
+    const result = await recordDurableAlertAction(context.database, id.data, body.data.action, actor.name, requestId, actor.id, body.data.expectedVersion);
     return jsonData({ ...result, durability: "d1" }, { headers: guard.rateLimitHeaders, meta: { requestId } });
   } catch (error) {
     if (error instanceof DurableOperationError) return jsonError(error.status, error.code, error.message, { requestId, headers: guard.rateLimitHeaders });
