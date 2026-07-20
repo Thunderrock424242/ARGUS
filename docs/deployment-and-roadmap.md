@@ -6,7 +6,7 @@ ARGUS separates the interface from the runtime:
 
 - GitHub Pages serves the Vite-built static interface under `/ARGUS/`.
 - A standalone Cloudflare Worker serves read APIs, D1-backed versioned data, protected operations, scheduled retention, and deterministic Aether.
-- The Pages build receives the Worker URL through the public GitHub repository variable `ARGUS_API_URL`.
+- The Pages workflow pins the canonical public Worker URL as `VITE_ARGUS_API_URL`; the URL is public configuration, not a credential.
 - The Worker accepts browser requests only from configured origins. Administrative routes are mounted but disabled without a server-side secret, and durable operations also require D1.
 
 Before deployment:
@@ -14,7 +14,7 @@ Before deployment:
 1. Run lint, typecheck, unit tests, the Pages build, and `npm run brain:check`.
 2. Provision D1, apply the reviewed migrations, add its `DB` binding, and store the bootstrap and GitHub OAuth values with Wrangler secrets.
 3. Deploy the Worker with `npm run brain:deploy`, seed demonstration read models through the protected endpoint, and record its `workers.dev` URL.
-4. Set `ARGUS_API_URL` in GitHub repository variables and run the Pages workflow.
+4. Confirm the canonical Worker URL in `.github/workflows/deploy-pages.yml` and run the Pages workflow.
 5. Keep collectors in dry-run for the public demonstration.
 6. Verify Worker CORS, the `X-ARGUS-Data-Store` header, globe/map tiles and attribution, `/api/health`, Aether fallback behavior, and demonstration labels.
 7. Confirm no `.env`, credential, raw private evidence, or production database export is in either artifact.

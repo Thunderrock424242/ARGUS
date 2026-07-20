@@ -14,7 +14,7 @@ export async function GET(
     ...(configuration
       ? { clientId: configuration.clientId, callbackUrl: configuration.callbackUrl }
       : {}),
-    authorizationEndpoint: "https://github.com/login/oauth/authorize",
+    authorizeUrl: "https://github.com/login/oauth/authorize",
     pkceMethod: "S256",
   };
   return jsonData(data, { meta: { requestId } });

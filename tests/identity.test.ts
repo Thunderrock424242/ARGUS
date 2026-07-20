@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { POST as exchangeSession } from "@/app/api/auth/exchange/route";
+import { GET as getAuthConfiguration } from "@/app/api/auth/config/route";
 import { GET as getSession } from "@/app/api/auth/session/route";
 import { POST as logout } from "@/app/api/auth/logout/route";
 import { PUT as updateRoles } from "@/app/api/admin/users/[id]/roles/route";
@@ -21,6 +22,24 @@ async function payload<T>(response: Response): Promise<T> {
 }
 
 describe("ARGUS identity and role controls", () => {
+  it("returns the public GitHub authorize URL without exposing or redacting a secret", async () => {
+    const response = await getAuthConfiguration(
+      new Request("https://argus.example/api/auth/config"),
+      { ...identityConfiguration, database: new FakeD1Database() },
+    );
+    expect(response.status).toBe(200);
+    const rawResponse = await response.clone().text();
+    const configuration = await payload<{
+      data: { enabled: boolean; authorizeUrl: string; clientId?: string };
+    }>(response);
+    expect(configuration.data).toMatchObject({
+      enabled: true,
+      authorizeUrl: "https://github.com/login/oauth/authorize",
+      clientId: identityConfiguration.githubOAuthClientId,
+    });
+    expect(rawResponse).not.toContain(identityConfiguration.githubOAuthClientSecret);
+  });
+
   it("keeps role capabilities explicit and administrator-only operations isolated", () => {
     expect(permissionsForRoles(["viewer"])).toEqual(["profile:read"]);
     expect(permissionsForRoles(["reviewer"])).toContain("events:review");

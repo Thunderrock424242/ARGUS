@@ -63,7 +63,7 @@ npm run brain:check
 npm run brain:deploy
 ```
 
-After the first Worker deployment, create the GitHub repository variable `ARGUS_API_URL` with the resulting `https://...workers.dev` URL and rerun the Pages workflow. Until that variable is set—or whenever the Worker is unavailable—Aether uses its bundled deterministic fallback so the site remains usable.
+The Pages workflow pins the public `https://argus-brain.thunderrock-labs.workers.dev` API origin. If the Worker name or subdomain changes, update `VITE_ARGUS_API_URL` in `.github/workflows/deploy-pages.yml` and rerun the workflow. Whenever the Worker is unavailable, Aether uses its bundled deterministic fallback so the site remains usable.
 
 ## Identity and administrative API safety
 

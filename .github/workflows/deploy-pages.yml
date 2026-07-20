@@ -36,7 +36,9 @@ jobs:
       - name: Build static site
         run: npm run build
         env:
-          VITE_ARGUS_API_URL: ${{ vars.ARGUS_API_URL }}
+          # This is a public API origin, not a credential. Pin the canonical
+          # Worker URL so a stale repository-variable placeholder cannot ship.
+          VITE_ARGUS_API_URL: https://argus-brain.thunderrock-labs.workers.dev
 
       - name: Upload GitHub Pages artifact
         uses: actions/upload-pages-artifact@v3

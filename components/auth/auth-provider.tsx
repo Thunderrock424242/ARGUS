@@ -223,7 +223,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         LOGIN_ATTEMPT_KEY,
         JSON.stringify({ state, codeVerifier, createdAt: Date.now() } satisfies LoginAttempt),
       );
-      const authorize = new URL(configuration.authorizationEndpoint);
+      const authorize = new URL(configuration.authorizeUrl);
       authorize.searchParams.set("client_id", configuration.clientId);
       authorize.searchParams.set("redirect_uri", configuration.callbackUrl);
       authorize.searchParams.set("state", state);

@@ -60,6 +60,6 @@ npm run brain:check
 
 - **Admin route is unavailable on Pages:** correct; Pages is static. Worker admin routes also stay disabled until both the D1 binding and admin secret exist.
 - **Map or globe is blank:** verify WebGL support and that the browser can reach the configured public tile service. Switch to flat-map mode if the device struggles with globe projection. The rest of ARGUS remains usable without map rendering.
-- **Remote Aether is unavailable:** confirm the GitHub repository variable `ARGUS_API_URL` matches the deployed Worker URL and that the Pages origin is listed in `ALLOWED_ORIGINS`. The UI intentionally falls back to its bundled deterministic analysis.
+- **Remote Aether or sign-in is unavailable:** confirm `VITE_ARGUS_API_URL` in `.github/workflows/deploy-pages.yml` matches the deployed Worker URL and that the Pages origin is listed in `ALLOWED_ORIGINS`. The UI intentionally falls back to its bundled deterministic analysis where possible.
 - **D1 binding unavailable:** the Worker intentionally falls back to immutable demonstration fixtures, and durable writes return `durable_store_unavailable`.
 - **Collector run shows no network access:** correct; administrative API collector runs are always dry-run in this MVP.

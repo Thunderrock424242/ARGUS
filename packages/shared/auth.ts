@@ -73,7 +73,7 @@ export interface AuthPublicConfiguration {
   provider: "github";
   clientId?: string;
   callbackUrl?: string;
-  authorizationEndpoint: string;
+  authorizeUrl: string;
   pkceMethod: "S256";
 }
 
