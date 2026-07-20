@@ -23,6 +23,7 @@ Provision and initialize a remote database with the current migration files:
 ```powershell
 npx wrangler d1 create argus-intelligence
 # Add the returned DB binding to wrangler.jsonc, then apply in order:
+npx wrangler d1 execute argus-intelligence --remote --file=drizzle/0000_normal_klaw.sql
 npx wrangler d1 execute argus-intelligence --remote --file=drizzle/0001_moaning_power_man.sql
 npx wrangler d1 execute argus-intelligence --remote --file=drizzle/0002_ambiguous_spot.sql
 npx wrangler d1 execute argus-intelligence --remote --file=drizzle/0003_solid_phil_sheldon.sql

@@ -1,17 +1,28 @@
 {
-  "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "argus-brain",
-  "main": "worker/index.ts",
-  "compatibility_date": "2026-07-19",
-  "compatibility_flags": ["nodejs_compat"],
-  "triggers": {
-    "crons": ["15 3 * * *"]
-  },
-  "vars": {
-    "ALLOWED_ORIGINS": "https://thunderrock424242.github.io,http://localhost:5173,http://127.0.0.1:5173",
-    "RETENTION_DAYS": "180"
-  }
-  // After `wrangler d1 create argus-intelligence`, add the returned binding as
-  // `d1_databases: [{ "binding": "DB", "database_name": "argus-intelligence", "database_id": "..." }]`.
-  // Keep ARGUS_ADMIN_TOKEN in `wrangler secret`, never in this file.
+	"$schema": "node_modules/wrangler/config-schema.json",
+	"name": "argus-brain",
+	"main": "worker/index.ts",
+	"compatibility_date": "2026-07-19",
+	"compatibility_flags": [
+		"nodejs_compat"
+	],
+	"triggers": {
+		"crons": [
+			"15 3 * * *"
+		]
+	},
+	"vars": {
+		"ALLOWED_ORIGINS": "https://thunderrock424242.github.io,http://localhost:5173,http://127.0.0.1:5173",
+		"RETENTION_DAYS": "180"
+	},
+	"d1_databases": [
+		{
+			"binding": "DB",
+			"database_name": "argus-intelligence",
+			"database_id": "2f47f4a6-37c2-4646-bf1f-4f793ece45b7"
+		}
+	]
+	// After `wrangler d1 create argus-intelligence`, add the returned binding as
+	// `d1_databases: [{ "binding": "DB", "database_name": "argus-intelligence", "database_id": "..." }]`.
+	// Keep ARGUS_ADMIN_TOKEN in `wrangler secret`, never in this file.
 }
