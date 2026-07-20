@@ -97,6 +97,7 @@ export async function applyEventReview(
   request: ReviewRequest,
   requestId: string,
   occurredAt = new Date().toISOString(),
+  actorId?: string,
 ): Promise<{ event: IntelligenceEvent; audit: AuditLogEntry; stateChange: IntelligenceStateChange }> {
   const event = await readModelById<IntelligenceEvent>(
     database,
@@ -203,6 +204,7 @@ export async function applyEventReview(
     targetType: request.claimId ? "claim" : "event",
     targetId: request.claimId ?? event.id,
     actorName: request.reviewerName,
+    actorId,
     summary: `${request.reviewerName} durably recorded ${request.action} for ${event.title}.`,
     requestId,
     before,
@@ -230,8 +232,9 @@ export async function recordDurableEventReview(
   database: D1DocumentDatabase,
   request: ReviewRequest,
   requestId: string,
+  actorId?: string,
 ): Promise<{ event: IntelligenceEvent; audit: AuditLogEntry; stateChange: IntelligenceStateChange }> {
-  const result = await applyEventReview(database, request, requestId);
+  const result = await applyEventReview(database, request, requestId, new Date().toISOString(), actorId);
   await database.batch([
     prepareReadModelUpsert(database, READ_MODEL_COLLECTIONS.events, result.event),
     prepareReadModelUpsert(database, READ_MODEL_COLLECTIONS.stateHistory, result.stateChange),
@@ -248,6 +251,7 @@ export interface RelationshipReviewInput {
   relationshipConfidence?: number;
   exposureConfidence?: number;
   causalConfidence?: number;
+  actorId?: string;
 }
 
 export async function recordDurableRelationshipReview(
@@ -300,6 +304,7 @@ export async function recordDurableRelationshipReview(
     targetType: "relationship",
     targetId: relationshipId,
     actorName: input.reviewerName,
+    actorId: input.actorId,
     summary: `${input.reviewerName} reviewed relationship ${relationshipId}.`,
     requestId,
     before,
@@ -320,6 +325,7 @@ export async function saveDurableMonitoringLayout(
   layout: MonitoringLayout,
   reviewerName: string,
   requestId: string,
+  actorId?: string,
 ): Promise<{ layout: MonitoringLayout; audit: AuditLogEntry }> {
   const occurredAt = new Date().toISOString();
   const before = await readModelById<MonitoringLayout>(
@@ -333,6 +339,7 @@ export async function saveDurableMonitoringLayout(
     targetType: "monitoring-layout",
     targetId: layout.id,
     actorName: reviewerName,
+    actorId,
     summary: `${reviewerName} saved monitoring layout ${layout.name}.`,
     requestId,
     before,
@@ -352,6 +359,7 @@ export async function recordDurableAlertAction(
   action: "acknowledge" | "dismiss",
   reviewerName: string,
   requestId: string,
+  actorId?: string,
 ): Promise<{ alert: IntelligenceAlert; audit: AuditLogEntry }> {
   const alert = await readModelById<IntelligenceAlert>(
     database,
@@ -372,6 +380,7 @@ export async function recordDurableAlertAction(
     targetType: "alert",
     targetId: alert.id,
     actorName: reviewerName,
+    actorId,
     summary: `${reviewerName} ${action === "acknowledge" ? "acknowledged" : "dismissed"} alert ${alert.title}.`,
     requestId,
     before,
@@ -398,6 +407,7 @@ export async function enforceReadModelRetention(
   collections: ReadModelCollection[] = RETENTION_COLLECTIONS,
   auditContext?: {
     actorName: string;
+    actorId?: string;
     actorType?: AuditLogEntry["actorType"];
     requestId: string;
   },
@@ -418,6 +428,7 @@ export async function enforceReadModelRetention(
     targetType: "read-model",
     targetId: allowed.join(","),
     actorName: auditContext.actorName,
+    actorId: auditContext.actorId,
     actorType: auditContext.actorType,
     summary: `${auditContext.actorName} enforced retention before ${before} for ${allowed.join(", ")}.`,
     requestId: auditContext.requestId,
@@ -432,6 +443,7 @@ export async function seedDurableDemonstrationData(
   database: D1DocumentDatabase,
   reviewerName: string,
   requestId: string,
+  actorId?: string,
 ): Promise<{ collections: number; records: number; auditId: string }> {
   const result = await seedDemonstrationReadModels(database);
   const audit = createAuditEntry({
@@ -439,6 +451,7 @@ export async function seedDurableDemonstrationData(
     targetType: "read-model",
     targetId: "demonstration-dataset",
     actorName: reviewerName,
+    actorId,
     summary: `${reviewerName} seeded ${result.records} demonstration read models across ${result.collections} collections.`,
     requestId,
     after: result,

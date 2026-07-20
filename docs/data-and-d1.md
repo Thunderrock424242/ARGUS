@@ -18,17 +18,17 @@ npm run db:generate
 
 Review the SQL, constraints, delete behavior, indexes, and migration ordering before applying it. Never edit the migration journal casually after a migration has been deployed.
 
-Provision and initialize a remote database with the current migration files:
+Provision and initialize a new remote database with the current migration files:
 
 ```powershell
 npx wrangler d1 create argus-intelligence
-# Add the returned DB binding to wrangler.jsonc, then apply in order:
-npx wrangler d1 execute argus-intelligence --remote --file=drizzle/0000_normal_klaw.sql
-npx wrangler d1 execute argus-intelligence --remote --file=drizzle/0001_moaning_power_man.sql
-npx wrangler d1 execute argus-intelligence --remote --file=drizzle/0002_ambiguous_spot.sql
-npx wrangler d1 execute argus-intelligence --remote --file=drizzle/0003_solid_phil_sheldon.sql
+# Add the returned DB binding to wrangler.jsonc with migrations_dir "drizzle",
+# then apply every pending reviewed migration in journal order:
+npx wrangler d1 migrations apply argus-intelligence --remote
 npx wrangler secret put ARGUS_ADMIN_TOKEN
 ```
+
+The existing ARGUS production database predates migration tracking: files `0000` through `0003` were applied with `wrangler d1 execute`. Before its first tracked migration, run `scripts/baseline-existing-d1-migrations.sql` once as described in [Identity and roles](identity-and-roles.md). Always list pending remote migrations and verify the names before applying them.
 
 After deployment, call `POST /api/admin/demo-seed` once with the bearer token, a reviewer name, and `confirmation: "seed-demonstration-data"`. The seed is idempotent and updates versions on subsequent runs.
 
@@ -44,6 +44,7 @@ The schema includes:
 - collector runs and review queue items
 - watchlists and intelligence briefs
 - versioned materialized API documents used by the Worker
+- GitHub identities, roles, hashed sessions, and durable rate-limit counters
 
 Fields used for filtering and relationships remain typed columns; richer evolving assessments use JSON. Checks constrain severity and confidence. Unique indexes protect source URLs, event slugs, and source/external-ID pairs. Foreign keys state intentional cascade or restrict behavior.
 

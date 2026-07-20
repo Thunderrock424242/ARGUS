@@ -41,7 +41,7 @@ export const reviewRequestSchema = z
       "add-watchlist",
     ]),
     eventId: targetIdentifier,
-    reviewerName: z.string().trim().min(1).max(100),
+    reviewerName: z.string().trim().min(1).max(100).default("Deployment Operator"),
     reason: z.string().trim().min(3).max(2_000).optional(),
     updates: eventUpdatesSchema.optional(),
     claimId: targetIdentifier.optional(),

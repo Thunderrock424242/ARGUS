@@ -42,7 +42,7 @@ Safe JSON response
 
 Public reads and deterministic `/api/aether` are `no-store`. Report lists deliberately omit `rawPayload`. Administrative routes are mounted but disabled without the server-side token, and every durable mutation additionally requires D1. The static browser never receives the token.
 
-The browser starts from immutable demonstration records and can hydrate the Global Operations surface from the Worker. Protected event/relationship reviews, alert actions, monitoring layouts, read-model seeding, and retention are durable D1 operations. Public browser analyst controls remain local until an identity-aware gateway can authorize individuals without exposing a shared secret.
+The browser starts from immutable demonstration records and can hydrate the Global Operations surface from the Worker. Protected event/relationship reviews, alert actions, monitoring layouts, read-model seeding, and retention are durable D1 operations. GitHub OAuth with PKCE establishes stable identities, and the Worker authorizes D1-backed sessions and roles without exposing a shared secret.
 
 ## Collection and processing flow
 
@@ -68,4 +68,4 @@ The collector runtime executes one persistent job and returns an explicit retry 
 
 ## Current versus planned
 
-Current screens and data remain a fictional demonstration. D1-backed reads, versioned documents, audited write batches, scheduled retention, globe mode, browser notifications, and Worker hydration are implemented. Live collector adapters remain hard-coded to dry-run from web requests, and public analyst controls remain local until identity/roles and hardened outbound transport are deployed.
+Current screens and data remain a fictional demonstration. D1-backed reads, versioned documents, audited write batches, scheduled retention, identity/roles, globe mode, browser notifications, and Worker hydration are implemented. Event and relationship decisions can use the authenticated Worker path; several other screen controls remain browser-local while owner-aware persistence and hardened outbound transport are built.

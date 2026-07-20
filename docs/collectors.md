@@ -56,4 +56,4 @@ Implement `IntelligenceCollector`, keep transport injection, define a fixed allo
 
 ## Rate limiting
 
-`RateLimitStore` and `FixedWindowRateLimiter` separate policy from storage. The memory store is process-local and protects development endpoints only. Production should implement the store with a Durable Object, D1 transaction, or managed gateway and use trusted platform client identity. Per-user admin limits and per-source outbound limits are separate controls; neither replaces the other.
+`RateLimitStore` and `FixedWindowRateLimiter` separate policy from storage. The memory store remains limited to isolated tests. Protected Worker routes use the D1 rate-limit store and stable session identity; a higher-volume rollout should evaluate Durable Objects or a managed gateway. Per-user admin limits and per-source outbound limits are separate controls; neither replaces the other.

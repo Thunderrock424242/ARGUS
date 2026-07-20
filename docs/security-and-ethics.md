@@ -33,7 +33,9 @@ Camera and market-provider URLs use the same rule: validate on onboarding and im
 
 ## Authentication and authorization
 
-The admin token is an MVP deployment switch, not full identity. Protected Worker routes are disabled unless the secret is configured; durable routes also require D1. Production should use a dedicated access gateway or sign-in provider, bind actions to a stable user ID, and enforce roles server-side. Suggested roles are viewer, analyst, reviewer, source manager, and administrator. UI visibility is not authorization, and the public Pages bundle never contains the shared token.
+GitHub OAuth with PKCE supplies human identity. ARGUS converts the verified GitHub numeric ID into a stable analyst ID, stores only hashed short-lived session credentials in D1, and enforces viewer, analyst, reviewer, source-manager, and administrator permissions in the Worker. The OAuth flow requests no GitHub scopes and discards and revokes the temporary GitHub token after identity lookup. UI visibility is not authorization.
+
+The admin token remains a bootstrap and recovery switch, not an ordinary user identity. It is accepted only by protected Worker routes and never enters the public Pages bundle. Role changes are audited against the stable actor ID, and the last administrator cannot be removed.
 
 Rotate secrets, keep them in the hosting secret manager, and never use `VITE_` for credentials. Do not log authorization headers, source credentials, raw cookies, or full rejected request bodies.
 
@@ -61,7 +63,7 @@ Public availability does not automatically make collection ethical, necessary, o
 
 ## Threat-driven production checklist
 
-- Place admin routes behind identity-aware access and durable distributed rate limits.
+- Keep protected routes behind the implemented identity checks and D1-backed distributed rate limits; alert on repeated authorization failures.
 - Implement a transactional writable provider with optimistic concurrency.
 - Use a controlled egress proxy or equivalent DNS-pinning transport.
 - Encrypt backups and sensitive fields; define retention and deletion schedules.

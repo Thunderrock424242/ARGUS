@@ -4,6 +4,7 @@ import Link from "@/components/navigation/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { IntelligenceEvent } from "@/packages/shared/types";
 import { ConfidenceMeter, SeverityMark, StatusBadge, buttonClass, formatDate, primaryButtonClass, titleCase } from "@/components/domain/argus-ui";
+import { useAuth } from "@/components/auth/auth-provider";
 
 type Decision = "confirmed" | "rejected" | "disputed" | "evidence-requested";
 type Queue = "priority" | "low-confidence" | "contradictions" | "duplicates" | "watchlists" | "aether";
@@ -23,6 +24,8 @@ export function ReviewQueue({ events }: { events: IntelligenceEvent[] }) {
   const [decisions, setDecisions] = useState<Record<string, Decision>>({});
   const [notice, setNotice] = useState("Select a record and use the action controls or keyboard shortcuts.");
   const [showShortcuts, setShowShortcuts] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const auth = useAuth();
 
   const queued = useMemo(() => events.filter((event) => {
     if (decisions[event.id]) return false;
@@ -36,12 +39,43 @@ export function ReviewQueue({ events }: { events: IntelligenceEvent[] }) {
 
   const selected = queued[Math.min(selectedIndex, Math.max(0, queued.length - 1))];
 
-  const applyDecision = useCallback((decision: Decision) => {
-    if (!selected) return;
-    setDecisions((current) => ({ ...current, [selected.id]: decision }));
-    setNotice(`${selected.title} marked ${decision.replace("-", " ")} in this demonstration session. This local decision is non-durable and did not write a server audit record.`);
-    setSelectedIndex((value) => Math.min(value, Math.max(0, queued.length - 2)));
-  }, [queued.length, selected]);
+  const applyDecision = useCallback(async (decision: Decision) => {
+    if (!selected || submitting) return;
+    if (!auth.principal) {
+      setNotice("Sign in with GitHub before recording a durable analyst decision.");
+      return;
+    }
+    if (!auth.can("events:review")) {
+      setNotice("The reviewer or administrator role is required for event decisions.");
+      return;
+    }
+    const action = decision === "evidence-requested" ? "request-evidence" : decision === "confirmed" ? "confirm" : decision === "rejected" ? "reject" : "dispute";
+    setSubmitting(true);
+    setNotice(`Recording ${decision.replace("-", " ")} with the ARGUS Worker…`);
+    try {
+      const response = await auth.authenticatedFetch("/api/admin/review", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          action,
+          eventId: selected.id,
+          ...(action === "confirm" ? {} : { reason: `Decision recorded by ${auth.principal.displayName} through the ARGUS review queue.` }),
+        }),
+      });
+      if (!response.ok) {
+        const payload = (await response.json()) as { error?: { message?: string } };
+        throw new Error(payload.error?.message ?? "The decision was not accepted.");
+      }
+      const payload = (await response.json()) as { data: { auditId: string } };
+      setDecisions((current) => ({ ...current, [selected.id]: decision }));
+      setNotice(`${selected.title} was durably marked ${decision.replace("-", " ")}. Audit ${payload.data.auditId}.`);
+      setSelectedIndex((value) => Math.min(value, Math.max(0, queued.length - 2)));
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "The decision could not be recorded.");
+    } finally {
+      setSubmitting(false);
+    }
+  }, [auth, queued.length, selected, submitting]);
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
@@ -49,10 +83,10 @@ export function ReviewQueue({ events }: { events: IntelligenceEvent[] }) {
       if (target?.matches("input, textarea, select") || target?.isContentEditable) return;
       if (event.key === "j" || event.key === "ArrowDown") { event.preventDefault(); setSelectedIndex((value) => Math.min(Math.max(0, queued.length - 1), value + 1)); }
       if (event.key === "k" || event.key === "ArrowUp") { event.preventDefault(); setSelectedIndex((value) => Math.max(0, value - 1)); }
-      if (event.key === "c") applyDecision("confirmed");
-      if (event.key === "r") applyDecision("rejected");
-      if (event.key === "d") applyDecision("disputed");
-      if (event.key === "e") applyDecision("evidence-requested");
+      if (event.key === "c") void applyDecision("confirmed");
+      if (event.key === "r") void applyDecision("rejected");
+      if (event.key === "d") void applyDecision("disputed");
+      if (event.key === "e") void applyDecision("evidence-requested");
       if (event.key === "?") setShowShortcuts((value) => !value);
     }
     window.addEventListener("keydown", onKeyDown);
@@ -92,7 +126,7 @@ export function ReviewQueue({ events }: { events: IntelligenceEvent[] }) {
             </div>
             <aside className="space-y-4"><div className="rounded-lg border border-white/[.08] bg-white/[.018] p-4"><ConfidenceMeter score={selected.automatedConfidence} /><p className="mt-3 text-[10px] leading-4 text-slate-500">Automated confidence measures evidence-rule satisfaction; it is not a probability and does not replace analyst verification.</p></div><dl className="grid grid-cols-2 gap-3 rounded-lg border border-white/[.08] p-4"><div><dt className="text-[8px] uppercase tracking-[.13em] text-slate-600">Reports</dt><dd className="mt-1 text-sm text-slate-200">{selected.sourceReportIds.length}</dd></div><div><dt className="text-[8px] uppercase tracking-[.13em] text-slate-600">Official</dt><dd className="mt-1 text-sm text-slate-200">{selected.officialSourceCount}</dd></div><div><dt className="text-[8px] uppercase tracking-[.13em] text-slate-600">Detected</dt><dd className="mt-1 text-[10px] text-slate-300">{formatDate(selected.firstDetectedAt)}</dd></div><div><dt className="text-[8px] uppercase tracking-[.13em] text-slate-600">Updated</dt><dd className="mt-1 text-[10px] text-slate-300">{formatDate(selected.lastUpdatedAt)}</dd></div></dl><Link href={`/events/${selected.slug}`} className={`${buttonClass} w-full`}>Open full dossier →</Link></aside>
           </div>
-          <div className="border-t border-white/[.08] bg-[#0d161f] p-4"><div className="flex flex-wrap items-center gap-2"><button type="button" className={primaryButtonClass} onClick={() => applyDecision("confirmed")}><kbd className="rounded bg-black/25 px-1.5 py-0.5 font-mono text-[9px]">C</kbd> Confirm</button><button type="button" className={buttonClass} onClick={() => applyDecision("disputed")}><kbd className="rounded bg-black/25 px-1.5 py-0.5 font-mono text-[9px]">D</kbd> Mark disputed</button><button type="button" className={buttonClass} onClick={() => applyDecision("evidence-requested")}><kbd className="rounded bg-black/25 px-1.5 py-0.5 font-mono text-[9px]">E</kbd> Request evidence</button><button type="button" className={`${buttonClass} border-red-300/20 text-red-200`} onClick={() => applyDecision("rejected")}><kbd className="rounded bg-black/25 px-1.5 py-0.5 font-mono text-[9px]">R</kbd> Reject</button></div><p className="mt-3 text-[10px] text-slate-500" role="status">{notice}</p></div>
+          <div className="border-t border-white/[.08] bg-[#0d161f] p-4"><div className="flex flex-wrap items-center gap-2"><button type="button" disabled={submitting} className={primaryButtonClass} onClick={() => void applyDecision("confirmed")}><kbd className="rounded bg-black/25 px-1.5 py-0.5 font-mono text-[9px]">C</kbd> Confirm</button><button type="button" disabled={submitting} className={buttonClass} onClick={() => void applyDecision("disputed")}><kbd className="rounded bg-black/25 px-1.5 py-0.5 font-mono text-[9px]">D</kbd> Mark disputed</button><button type="button" disabled={submitting} className={buttonClass} onClick={() => void applyDecision("evidence-requested")}><kbd className="rounded bg-black/25 px-1.5 py-0.5 font-mono text-[9px]">E</kbd> Request evidence</button><button type="button" disabled={submitting} className={`${buttonClass} border-red-300/20 text-red-200`} onClick={() => void applyDecision("rejected")}><kbd className="rounded bg-black/25 px-1.5 py-0.5 font-mono text-[9px]">R</kbd> Reject</button></div><p className="mt-3 text-[10px] text-slate-500" role="status">{notice}</p></div>
         </div> : <div className="flex h-full items-center justify-center p-10 text-center"><div><p className="text-lg font-semibold text-slate-300">No records in this queue</p><p className="mt-2 text-sm text-slate-600">Choose another queue or refresh the demonstration session.</p></div></div>}
       </div>
     </section>

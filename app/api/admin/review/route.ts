@@ -1,4 +1,4 @@
-import { requireAdmin } from "@/lib/api/admin-guard";
+import { actorForRequest, requirePermission } from "@/lib/api/admin-guard";
 import { DEMONSTRATION_DATA_LABEL } from "@/lib/api/read-models";
 import { jsonData, jsonError, requestIdFrom } from "@/lib/api/responses";
 import { validateJsonBody } from "@/lib/api/validation";
@@ -21,7 +21,7 @@ export async function POST(
   context: ReviewRouteContext = {},
 ): Promise<Response> {
   const requestId = requestIdFrom(request);
-  const guard = await requireAdmin(request, "review", requestId, context.adminToken);
+  const guard = await requirePermission(request, "events:review", "review", requestId, context);
   if (!guard.authorized) return guard.response;
 
   if (!context.database) {
@@ -41,7 +41,13 @@ export async function POST(
   }
 
   try {
-    const result = await recordDurableEventReview(context.database, body.data, requestId);
+    const actor = actorForRequest(guard.principal, body.data.reviewerName);
+    const result = await recordDurableEventReview(
+      context.database,
+      { ...body.data, reviewerName: actor.name },
+      requestId,
+      actor.id,
+    );
     return jsonData(
       {
         status: "recorded",

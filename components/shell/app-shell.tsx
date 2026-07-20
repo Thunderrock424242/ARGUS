@@ -16,6 +16,8 @@ import {
   GitBranch,
   Globe2,
   History,
+  LogIn,
+  LogOut,
   ListChecks,
   Map,
   Menu,
@@ -33,6 +35,7 @@ import { usePathname, useRouter } from "@/lib/client/navigation";
 import { FormEvent, ReactNode, useEffect, useMemo, useState } from "react";
 import { demoEvents, demoSources } from "@/packages/shared/demo-data";
 import { BrandMark } from "./brand-mark";
+import { useAuth } from "@/components/auth/auth-provider";
 
 const navigation = [
   { href: "/", label: "Global Operations", icon: Activity },
@@ -78,8 +81,10 @@ export function AppShell({ children }: { children: ReactNode }) {
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [now, setNow] = useState<Date | null>(null);
+  const auth = useAuth();
 
   useEffect(() => {
     document.documentElement.dataset.argusHydrated = "true";
@@ -260,10 +265,11 @@ export function AppShell({ children }: { children: ReactNode }) {
           <Bell size={18} />
           <span>4</span>
         </button>
-        <button className="profile-button" type="button" aria-label="Open analyst profile">
-          <CircleUserRound size={20} />
-          <span>Mason</span>
+        <button className="profile-button" type="button" aria-label="Open analyst profile" aria-expanded={profileOpen} onClick={() => setProfileOpen((value) => !value)}>
+          {auth.principal?.avatarUrl ? <img src={auth.principal.avatarUrl} alt="" className="h-5 w-5 rounded-full" referrerPolicy="no-referrer" /> : <CircleUserRound size={20} />}
+          <span>{auth.principal?.displayName ?? (auth.status === "loading" ? "Identity" : "Sign in")}</span>
         </button>
+        {profileOpen ? <div className="absolute right-3 top-[calc(100%+8px)] z-50 w-80 rounded-xl border border-white/10 bg-[#0b141d] p-4 shadow-2xl shadow-black/50"><div className="flex items-start gap-3">{auth.principal?.avatarUrl ? <img src={auth.principal.avatarUrl} alt="" className="h-10 w-10 rounded-full border border-white/10" referrerPolicy="no-referrer" /> : <span className="flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-white/[.03]"><CircleUserRound size={21} /></span>}<div className="min-w-0"><p className="truncate text-sm font-semibold text-slate-100">{auth.principal?.displayName ?? "ARGUS identity"}</p><p className="mt-1 text-[10px] text-slate-500">{auth.principal ? `@${auth.principal.login}` : "GitHub OAuth + PKCE"}</p></div></div>{auth.principal ? <><div className="mt-4 flex flex-wrap gap-1.5">{auth.principal.roles.map((role) => <span key={role} className="rounded border border-cyan-300/15 bg-cyan-300/[.05] px-2 py-1 text-[9px] uppercase tracking-[.08em] text-cyan-200">{role}</span>)}</div><p className="mt-3 text-[10px] leading-5 text-slate-500">Protected actions are checked by the Worker against these D1 roles. Interface visibility is not authorization.</p><button type="button" className="button mt-4 w-full justify-center" onClick={() => { setProfileOpen(false); void auth.signOut(); }}><LogOut size={13} /> Sign out</button></> : <><p className="mt-3 text-[10px] leading-5 text-slate-500">Sign in to receive a stable analyst ID and use role-authorized review tools. Public demonstration views remain available.</p><button type="button" className="button button-primary mt-4 w-full justify-center" disabled={auth.status === "loading"} onClick={() => void auth.signIn()}><LogIn size={13} /> Sign in with GitHub</button></>}{auth.error ? <p className="mt-3 rounded border border-red-300/15 bg-red-300/[.04] p-2 text-[10px] leading-4 text-red-200" role="alert">{auth.error}</p> : null}</div> : null}
       </header>
 
       <main className="app-content">{children}</main>

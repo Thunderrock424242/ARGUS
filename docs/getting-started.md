@@ -21,6 +21,10 @@ Use `npm run brain:dev` in a second terminal when testing the standalone Cloudfl
 | Variable | Required | Default | Purpose |
 | --- | --- | --- | --- |
 | `ARGUS_ADMIN_TOKEN` | No | unset | Enables protected administrative routes only when configured |
+| `GITHUB_OAUTH_CLIENT_ID` | For sign-in | unset | GitHub OAuth App client ID stored as a Worker secret |
+| `GITHUB_OAUTH_CLIENT_SECRET` | For sign-in | unset | GitHub OAuth App client secret stored as a Worker secret |
+| `AUTH_CALLBACK_URL` | For sign-in | Pages root | Exact registered GitHub OAuth callback |
+| `AUTH_SESSION_TTL_SECONDS` | No | `28800` | ARGUS session lifetime, clamped to 15 minutes through 24 hours |
 | `ARGUS_COLLECTOR_MODE` | No | `dry-run` | Operational intent; admin web requests remain dry-run regardless |
 | `RETENTION_DAYS` | No | `180` | Worker schedule retention window, clamped to 30-3650 days |
 | `VITE_ARGUS_API_URL` | No | unset | Public URL of the separately hosted ARGUS brain; the browser fallback is used when unset |
@@ -28,6 +32,8 @@ Use `npm run brain:dev` in a second terminal when testing the standalone Cloudfl
 `.env*` is ignored except `.env.example`. Values prefixed `VITE_` are browser-visible, so no ARGUS credential may use that prefix. Store Worker secrets through Cloudflare rather than committing them.
 
 `ARGUS_ADMIN_TOKEN` enables the Worker's protected administrative handlers only when D1 is also configured. Generate it with a cryptographically secure local tool (for example, 32 random bytes encoded as hex), store it with `wrangler secret put ARGUS_ADMIN_TOKEN`, and send it only from a trusted administrative client in the `Authorization: Bearer` header.
+
+For browser identity and role setup, follow [Identity and roles](identity-and-roles.md). OAuth values are Worker bindings and must never use the browser-visible `VITE_` prefix.
 
 ## Development modes
 

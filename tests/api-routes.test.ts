@@ -31,11 +31,11 @@ describe.sequential("ARGUS API routes", () => {
   const adminToken = "test-only-admin-token-with-sufficient-entropy";
 
   beforeAll(() => {
-    delete process.env.ARGUS_ADMIN_TOKEN;
+    Reflect.deleteProperty(process.env, "ARGUS_ADMIN_TOKEN");
   });
 
   afterAll(() => {
-    if (previousToken === undefined) delete process.env.ARGUS_ADMIN_TOKEN;
+    if (previousToken === undefined) Reflect.deleteProperty(process.env, "ARGUS_ADMIN_TOKEN");
     else process.env.ARGUS_ADMIN_TOKEN = previousToken;
   });
 
@@ -190,6 +190,7 @@ describe.sequential("ARGUS API routes", () => {
 
   it("runs only a registered dry-run collector from the admin API", async () => {
     process.env.ARGUS_ADMIN_TOKEN = adminToken;
+    const database = new FakeD1Database();
     const source = demoSources.find((candidate) => candidate.enabled) ?? demoSources[0];
     const response = await runCollector(
       new Request("https://argus.example/api/admin/collectors/run", {
@@ -205,6 +206,7 @@ describe.sequential("ARGUS API routes", () => {
           mode: "dry-run",
         }),
       }),
+      { database },
     );
     const payload = await body(response);
     expect(response.status).toBe(202);

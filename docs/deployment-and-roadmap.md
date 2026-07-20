@@ -12,7 +12,7 @@ ARGUS separates the interface from the runtime:
 Before deployment:
 
 1. Run lint, typecheck, unit tests, the Pages build, and `npm run brain:check`.
-2. Provision D1, apply the reviewed migrations, add its `DB` binding, and store `ARGUS_ADMIN_TOKEN` with Wrangler secrets.
+2. Provision D1, apply the reviewed migrations, add its `DB` binding, and store the bootstrap and GitHub OAuth values with Wrangler secrets.
 3. Deploy the Worker with `npm run brain:deploy`, seed demonstration read models through the protected endpoint, and record its `workers.dev` URL.
 4. Set `ARGUS_API_URL` in GitHub repository variables and run the Pages workflow.
 5. Keep collectors in dry-run for the public demonstration.
@@ -26,9 +26,9 @@ For production monitoring, deploy the collector scheduler/queue separately from 
 ## Current limitations
 
 - The GitHub Pages interface remains usable if the Worker is unavailable, but remote API features fall back to bundled demonstration behavior.
-- D1-backed reads and audited mutation batches are implemented, but the public browser cannot use protected writes until identity-aware authorization replaces the shared token.
-- Admin bearer auth is a deployment switch, not user identity or role-based authorization.
-- The memory rate limiter is not distributed across Worker isolates.
+- GitHub OAuth, PKCE, stable analyst IDs, D1 sessions, role checks, audited role assignment, and browser review writes are implemented; the live deployment still requires the OAuth App, secrets, migration, and Worker rollout.
+- The admin bearer token remains bootstrap/recovery access and must be rotated and kept out of ordinary browser use.
+- Protected-route and sign-in rate limits use D1 counters; higher-volume deployments should evaluate a Durable Object or gateway limiter.
 - Administrative collector runs are deliberately dry-run and do not persist reports.
 - Retention cron is configured, but live collector transport, DNS pinning, queues, and source credentials are not deployed.
 - RSS parsing is demonstration-grade and should be replaced by a hardened streaming parser.
@@ -37,7 +37,7 @@ For production monitoring, deploy the collector scheduler/queue separately from 
 - Aether is deterministic and has no live AI provider.
 - The relationship, market, conflict, alert, camera, and playback datasets are fictional stored snapshots; no live provider is connected.
 - The map supports globe and flat projections but has no terrain/elevation provider.
-- Voice quality depends on browser SpeechSynthesis, and the public monitoring-wall UI remains browser-local pending user identity.
+- Voice quality depends on browser SpeechSynthesis, and the public monitoring-wall UI remains browser-local pending owner-aware save/load integration.
 - Map accuracy is limited to fixture coordinates; precision/provenance is not yet modeled.
 - Browser notifications, report export, retention automation, and durable review/correction endpoints are implemented; broader backup/export and deletion workflows remain.
 
@@ -47,9 +47,9 @@ For production monitoring, deploy the collector scheduler/queue separately from 
 
 The D1 read-model provider, contract tests, versioned writes, audit batches, retention, and explicit seed now exist. Next, add cursor pagination and make normalized evidence/report tables authoritative during live ingestion rather than relying on materialized documents alone.
 
-### 2. Identity and roles
+### 2. Identity and roles — implemented, deployment setup pending
 
-Integrate a dedicated identity layer, stable analyst IDs, role checks, CSRF protection if cookie-authenticated writes are added, and Durable Object or gateway rate limiting. Retire shared bearer access for ordinary review.
+GitHub OAuth with PKCE, stable analyst IDs, hashed D1 sessions, role checks, browser review writes, role-aware audits, last-administrator protection, and D1 rate limiting are implemented. Complete the one-time OAuth configuration in `docs/identity-and-roles.md`; retain the shared bearer only for bootstrap and recovery.
 
 ### 3. Hardened ingestion runtime
 

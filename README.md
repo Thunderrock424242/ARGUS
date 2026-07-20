@@ -65,11 +65,11 @@ npm run brain:deploy
 
 After the first Worker deployment, create the GitHub repository variable `ARGUS_API_URL` with the resulting `https://...workers.dev` URL and rerun the Pages workflow. Until that variable is set—or whenever the Worker is unavailable—Aether uses its bundled deterministic fallback so the site remains usable.
 
-## Administrative API safety
+## Identity and administrative API safety
 
-The Worker mounts administrative routes, but they return `503 admin_disabled` unless `ARGUS_ADMIN_TOKEN` is stored as a Worker secret. Durable routes also require the `DB` binding. Send the token only as `Authorization: Bearer <token>` from a trusted administrative client; never put it in GitHub Pages code, a `VITE_` variable, a URL, a committed file, a log, or an API response.
+The Worker supports GitHub OAuth with PKCE, hashed short-lived D1 sessions, stable user IDs, explicit roles, and D1-backed rate limits. New identities receive `viewer`; reviewer, source-manager, and administrator permissions are granted through the audited role API. See [Identity and roles](docs/identity-and-roles.md) for setup.
 
-Event reviews, relationship reviews, alert actions, monitoring layouts, read-model seeding, and retention operate on versioned D1 documents and append audit/history records. The browser does not call these routes because a static public client cannot safely hold administrator credentials. Administrative collector requests remain `dry-run`; they cannot turn on network collection.
+Event reviews, relationship reviews, alert actions, monitoring layouts, read-model seeding, and retention operate on versioned D1 documents and append audit/history records. The browser sends only a short-lived ARGUS session; GitHub and bootstrap secrets never enter the Pages bundle. `ARGUS_ADMIN_TOKEN` remains command-line bootstrap/recovery access and must never be placed in `VITE_`, a URL, a committed file, a log, or a browser response. Administrative collector requests remain `dry-run`; they cannot turn on network collection.
 
 ## Public Worker endpoints
 
@@ -89,7 +89,7 @@ Event reviews, relationship reviews, alert actions, monitoring layouts, read-mod
 | GET | `/api/operations` | Global Operations counts and latest alerts |
 | GET | `/api/operations/snapshot` | Hydration snapshot for the Global Operations View |
 
-Protected Worker endpoints include `POST /api/admin/review`, `POST /api/admin/relationships/:id`, `POST /api/admin/alerts/:id`, `PUT /api/admin/layouts/:id`, `POST /api/admin/demo-seed`, and `POST /api/admin/retention`.
+Identity endpoints include `GET /api/auth/config`, `POST /api/auth/exchange`, `GET /api/auth/session`, and `POST /api/auth/logout`. Protected Worker endpoints include event and relationship review, alert and layout actions, dry-run collector execution, demonstration seeding, retention, user listing, and role assignment.
 
 These endpoints run under `npm run brain:dev` and are hosted by the standalone Worker, not at the GitHub Pages origin. All API responses are `no-store`, carry a request ID, redact credential-shaped fields, and label fictional data. Unknown query and body fields are rejected. Administrative handlers require both explicit server configuration and authorization.
 
@@ -98,6 +98,7 @@ These endpoints run under `npm run brain:dev` and are hosted by the standalone W
 - [Architecture](docs/architecture.md)
 - [Local setup and environment](docs/getting-started.md)
 - [D1, schema, and development data](docs/data-and-d1.md)
+- [Identity and roles](docs/identity-and-roles.md)
 - [Collectors and RSS sources](docs/collectors.md)
 - [Processing, correlation, and confidence](docs/intelligence-pipeline.md)
 - [Analyst review workflows](docs/analyst-workflows.md)

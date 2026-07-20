@@ -75,6 +75,7 @@ export interface CreateAuditEntryInput {
   reason?: string;
   occurredAt?: string;
   actorType?: AuditLogEntry["actorType"];
+  actorId?: string;
 }
 
 function actorIdentifier(name: string, actorType: AuditLogEntry["actorType"]): string {
@@ -86,7 +87,7 @@ export function createAuditEntry(input: CreateAuditEntryInput): AuditLogEntry {
   return {
     id: `audit-${crypto.randomUUID()}`,
     occurredAt: input.occurredAt ?? new Date().toISOString(),
-    actorId: actorIdentifier(input.actorName, actorType),
+    actorId: input.actorId ?? actorIdentifier(input.actorName, actorType),
     actorName: input.actorName,
     actorType,
     action: input.action,

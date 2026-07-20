@@ -138,7 +138,7 @@ const analystNameSchema = z.string().trim().min(1).max(100);
 
 export const relationshipReviewRequestSchema = z.object({
   analystState: z.enum(["needs-review", "confirmed", "rejected", "disputed"]),
-  reviewerName: analystNameSchema,
+  reviewerName: analystNameSchema.default("Deployment Operator"),
   reason: z.string().trim().min(3).max(2_000),
   analystNotes: z.string().trim().max(10_000).optional(),
   relationshipConfidence: z.number().int().min(0).max(100).optional(),
@@ -158,23 +158,23 @@ const monitoringWidgetSchema = z.object({
 }).strict();
 
 export const monitoringLayoutSaveSchema = z.object({
-  reviewerName: analystNameSchema,
+  reviewerName: analystNameSchema.default("Deployment Operator"),
   name: z.string().trim().min(1).max(120),
   widgets: z.array(monitoringWidgetSchema).max(60),
 }).strict();
 
 export const alertActionRequestSchema = z.object({
   action: z.enum(["acknowledge", "dismiss"]),
-  reviewerName: analystNameSchema,
+  reviewerName: analystNameSchema.default("Deployment Operator"),
 }).strict();
 
 export const demoSeedRequestSchema = z.object({
-  reviewerName: analystNameSchema,
+  reviewerName: analystNameSchema.default("Deployment Operator"),
   confirmation: z.literal("seed-demonstration-data"),
 }).strict();
 
 export const retentionRequestSchema = z.object({
-  reviewerName: analystNameSchema,
+  reviewerName: analystNameSchema.default("Deployment Operator"),
   before: dateTime,
   collections: z.array(z.enum(["reports", "relationship-history", "state-history", "alerts"])).min(1).max(4).optional(),
 }).strict();

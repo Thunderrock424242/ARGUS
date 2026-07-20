@@ -48,13 +48,13 @@ test("global search opens a matching intelligence record", async ({ page }) => {
   await expect(page).toHaveURL(/demo-northstar-island-earthquake/);
 });
 
-test("review decisions update the local demonstration queue", async ({ page }) => {
+test("review decisions require an authenticated ARGUS identity", async ({ page }) => {
   await gotoArgus(page, "/review");
   await expect(page.getByRole("heading", { name: "Review Queue" })).toBeVisible();
   const confirm = page.getByRole("button", { name: "C Confirm" });
   await expect(confirm).toBeVisible();
   await confirm.press("Enter");
-  await expect(page.getByRole("status")).toContainText("marked confirmed in this demonstration session");
+  await expect(page.getByRole("status")).toContainText("Sign in with GitHub before recording a durable analyst decision");
 });
 
 test("all primary analyst routes remain reachable", async ({ page }) => {

@@ -1,10 +1,17 @@
 import { POST as askAether } from "@/app/api/aether/route";
 import { POST as actOnAlert } from "@/app/api/admin/alerts/[id]/route";
 import { POST as seedDemoData } from "@/app/api/admin/demo-seed/route";
+import { POST as runCollector } from "@/app/api/admin/collectors/run/route";
 import { PUT as saveLayout } from "@/app/api/admin/layouts/[id]/route";
 import { POST as reviewRelationship } from "@/app/api/admin/relationships/[id]/route";
 import { POST as enforceRetention } from "@/app/api/admin/retention/route";
 import { POST as reviewEvent } from "@/app/api/admin/review/route";
+import { GET as listUsers } from "@/app/api/admin/users/route";
+import { PUT as updateUserRoles } from "@/app/api/admin/users/[id]/roles/route";
+import { GET as getAuthConfig } from "@/app/api/auth/config/route";
+import { POST as exchangeAuthCode } from "@/app/api/auth/exchange/route";
+import { POST as logout } from "@/app/api/auth/logout/route";
+import { GET as getAuthSession } from "@/app/api/auth/session/route";
 import { GET as getBrief } from "@/app/api/briefs/[slug]/route";
 import { GET as getBriefs } from "@/app/api/briefs/route";
 import { GET as getEvent } from "@/app/api/events/[slug]/route";
@@ -32,6 +39,10 @@ import {
 interface BrainEnv {
   ALLOWED_ORIGINS?: string;
   ARGUS_ADMIN_TOKEN?: string;
+  AUTH_CALLBACK_URL?: string;
+  AUTH_SESSION_TTL_SECONDS?: string;
+  GITHUB_OAUTH_CLIENT_ID?: string;
+  GITHUB_OAUTH_CLIENT_SECRET?: string;
   RETENTION_DAYS?: string;
   DB?: D1DocumentDatabase;
 }
@@ -95,12 +106,43 @@ async function route(request: Request, env: BrainEnv): Promise<Response> {
       status: "operational",
       dataClassification: "demonstration",
       dataStore: env.DB ? "d1-with-fixture-fallback" : "fixtures",
-      administrativeRoutesExposed: Boolean(env.DB && env.ARGUS_ADMIN_TOKEN),
+      administrativeRoutesExposed: Boolean(env.DB),
       administrativeRoutesProtected: true,
+      bootstrapAccessEnabled: Boolean(env.DB && env.ARGUS_ADMIN_TOKEN),
+      identityEnabled: Boolean(
+        env.DB &&
+        env.AUTH_CALLBACK_URL &&
+        env.GITHUB_OAUTH_CLIENT_ID &&
+        env.GITHUB_OAUTH_CLIENT_SECRET
+      ),
     });
   }
 
   const adminContext = { adminToken: env.ARGUS_ADMIN_TOKEN, database: env.DB };
+  const identityContext = {
+    ...adminContext,
+    githubOAuthClientId: env.GITHUB_OAUTH_CLIENT_ID,
+    githubOAuthClientSecret: env.GITHUB_OAUTH_CLIENT_SECRET,
+    authCallbackUrl: env.AUTH_CALLBACK_URL,
+    authSessionTtlSeconds: env.AUTH_SESSION_TTL_SECONDS,
+  };
+  if (request.method === "GET" && pathname === "/api/auth/config") {
+    return getAuthConfig(request, identityContext);
+  }
+  if (request.method === "POST" && pathname === "/api/auth/exchange") {
+    return exchangeAuthCode(request, identityContext);
+  }
+  if (request.method === "GET" && pathname === "/api/auth/session") {
+    return getAuthSession(request, adminContext);
+  }
+  if (request.method === "POST" && pathname === "/api/auth/logout") {
+    return logout(request, adminContext);
+  }
+  if (pathname.startsWith("/api/auth")) {
+    return jsonError(404, "not_found", "This identity API route does not exist.", {
+      requestId: requestIdFrom(request),
+    });
+  }
   if (request.method === "POST" && pathname === "/api/admin/review") {
     return reviewEvent(request, adminContext);
   }
@@ -109,6 +151,21 @@ async function route(request: Request, env: BrainEnv): Promise<Response> {
   }
   if (request.method === "POST" && pathname === "/api/admin/retention") {
     return enforceRetention(request, adminContext);
+  }
+  if (request.method === "POST" && pathname === "/api/admin/collectors/run") {
+    return runCollector(request, adminContext);
+  }
+  if (request.method === "GET" && pathname === "/api/admin/users") {
+    return listUsers(request, adminContext);
+  }
+  const userRolesMatch = pathname.match(/^\/api\/admin\/users\/([^/]+)\/roles$/);
+  if (request.method === "PUT" && userRolesMatch) {
+    const id = decodePathSegment(userRolesMatch[1]);
+    return id
+      ? updateUserRoles(request, { ...adminContext, params: Promise.resolve({ id }) })
+      : jsonError(400, "invalid_path", "The request path is invalid.", {
+          requestId: requestIdFrom(request),
+        });
   }
   const relationshipReviewMatch = pathname.match(/^\/api\/admin\/relationships\/([^/]+)$/);
   if (request.method === "POST" && relationshipReviewMatch) {
@@ -220,11 +277,17 @@ const worker = {
       : 180;
     const before = new Date(Date.now() - retentionDays * 86_400_000).toISOString();
     context.waitUntil(
-      enforceReadModelRetention(env.DB, before, undefined, {
-        actorName: "ARGUS retention scheduler",
-        actorType: "system",
-        requestId: `scheduled-${crypto.randomUUID()}`,
-      }).then(() => undefined),
+      Promise.all([
+        enforceReadModelRetention(env.DB, before, undefined, {
+          actorName: "ARGUS retention scheduler",
+          actorType: "system",
+          requestId: `scheduled-${crypto.randomUUID()}`,
+        }),
+        env.DB.batch([
+          env.DB.prepare("DELETE FROM auth_sessions WHERE expires_at <= ? OR revoked_at IS NOT NULL").bind(new Date().toISOString()),
+          env.DB.prepare("DELETE FROM auth_rate_limits WHERE expires_at <= ?").bind(Date.now()),
+        ]),
+      ]).then(() => undefined),
     );
   },
 };

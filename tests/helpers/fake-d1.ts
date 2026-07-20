@@ -15,6 +15,29 @@ interface StoredReadModel {
   dataClassification: string;
 }
 
+interface StoredAuthUser {
+  id: string;
+  provider: "github";
+  providerSubject: string;
+  login: string;
+  displayName: string;
+  avatarUrl: string | null;
+  status: "active" | "disabled";
+  createdAt: string;
+  updatedAt: string;
+  lastAuthenticatedAt: string;
+}
+
+interface StoredAuthSession {
+  id: string;
+  userId: string;
+  tokenHash: string;
+  createdAt: string;
+  expiresAt: string;
+  lastUsedAt: string;
+  revokedAt: string | null;
+}
+
 class FakeD1Statement implements D1PreparedStatementLike {
   private values: unknown[] = [];
 
@@ -38,11 +61,57 @@ class FakeD1Statement implements D1PreparedStatementLike {
         .map((row) => ({ document: row.document })) as T[];
       return { results: rows };
     }
+    if (normalized.includes("from auth_users u")) {
+      const rows = [...this.database.authUsers.values()]
+        .sort((left, right) => left.login.localeCompare(right.login))
+        .map((user) => ({
+          id: user.id,
+          provider: user.provider,
+          provider_subject: user.providerSubject,
+          login: user.login,
+          display_name: user.displayName,
+          avatar_url: user.avatarUrl,
+          status: user.status,
+          created_at: user.createdAt,
+          updated_at: user.updatedAt,
+          last_authenticated_at: user.lastAuthenticatedAt,
+          roles: [...(this.database.authRoles.get(user.id) ?? [])].join(",") || null,
+        })) as T[];
+      return { results: rows };
+    }
     return { results: [] };
   }
 
   async first<T>(): Promise<T | null> {
     const normalized = this.query.toLocaleLowerCase("en-US");
+    if (normalized.startsWith("insert into auth_rate_limits")) {
+      const [keyHash, windowStartedAt, expiresAt] = this.values as [string, number, number];
+      const key = `${keyHash}:${windowStartedAt}`;
+      const count = (this.database.rateLimits.get(key)?.count ?? 0) + 1;
+      this.database.rateLimits.set(key, { count, expiresAt });
+      return { count } as T;
+    }
+    if (normalized.includes("from auth_sessions s")) {
+      const [tokenHash, now] = this.values as [string, string];
+      const session = this.database.authSessions.get(tokenHash);
+      if (!session || session.revokedAt || session.expiresAt <= now) return null;
+      const user = this.database.authUsers.get(session.userId);
+      if (!user || user.status !== "active") return null;
+      return {
+        id: user.id,
+        provider: user.provider,
+        provider_subject: user.providerSubject,
+        login: user.login,
+        display_name: user.displayName,
+        avatar_url: user.avatarUrl,
+        status: user.status,
+        created_at: user.createdAt,
+        updated_at: user.updatedAt,
+        last_authenticated_at: user.lastAuthenticatedAt,
+        session_expires_at: session.expiresAt,
+        roles: [...(this.database.authRoles.get(user.id) ?? [])].join(",") || null,
+      } as T;
+    }
     if (!normalized.includes("from intelligence_read_models")) return null;
     const [collection, identifier] = this.values as [string, string];
     const row = [...this.database.readModels.values()].find((candidate) =>
@@ -77,6 +146,67 @@ class FakeD1Statement implements D1PreparedStatementLike {
       this.database.auditRows.push([...this.values]);
       return { meta: { changes: 1 } };
     }
+    if (normalized.startsWith("insert into auth_users")) {
+      const [id, providerSubject, login, displayName, avatarUrl, createdAt, updatedAt, lastAuthenticatedAt] = this.values as [string, string, string, string, string | null, string, string, string];
+      const existing = [...this.database.authUsers.values()].find((user) => user.providerSubject === providerSubject);
+      this.database.authUsers.set(existing?.id ?? id, {
+        id: existing?.id ?? id,
+        provider: "github",
+        providerSubject,
+        login,
+        displayName,
+        avatarUrl,
+        status: existing?.status ?? "active",
+        createdAt: existing?.createdAt ?? createdAt,
+        updatedAt,
+        lastAuthenticatedAt,
+      });
+      return { meta: { changes: 1 } };
+    }
+    if (normalized.startsWith("insert or ignore into auth_user_roles")) {
+      const [userId, grantedAt] = this.values as [string, string];
+      void grantedAt;
+      const roles = this.database.authRoles.get(userId) ?? new Set<string>();
+      roles.add("viewer");
+      this.database.authRoles.set(userId, roles);
+      return { meta: { changes: 1 } };
+    }
+    if (normalized.startsWith("insert into auth_user_roles")) {
+      const [userId, role] = this.values as [string, string];
+      const roles = this.database.authRoles.get(userId) ?? new Set<string>();
+      roles.add(role);
+      this.database.authRoles.set(userId, roles);
+      return { meta: { changes: 1 } };
+    }
+    if (normalized.startsWith("delete from auth_user_roles")) {
+      const [userId] = this.values as [string];
+      this.database.authRoles.set(userId, new Set());
+      return { meta: { changes: 1 } };
+    }
+    if (normalized.startsWith("delete from auth_sessions")) {
+      const [now] = this.values as [string];
+      for (const [tokenHash, session] of this.database.authSessions) {
+        if (session.expiresAt <= now || session.revokedAt) this.database.authSessions.delete(tokenHash);
+      }
+      return { meta: { changes: 1 } };
+    }
+    if (normalized.startsWith("insert into auth_sessions")) {
+      const [id, userId, tokenHash, createdAt, expiresAt, lastUsedAt] = this.values as [string, string, string, string, string, string];
+      this.database.authSessions.set(tokenHash, { id, userId, tokenHash, createdAt, expiresAt, lastUsedAt, revokedAt: null });
+      return { meta: { changes: 1 } };
+    }
+    if (normalized.startsWith("update auth_sessions set last_used_at")) {
+      const [lastUsedAt, tokenHash] = this.values as [string, string];
+      const session = this.database.authSessions.get(tokenHash);
+      if (session) session.lastUsedAt = lastUsedAt;
+      return { meta: { changes: session ? 1 : 0 } };
+    }
+    if (normalized.startsWith("update auth_sessions set revoked_at")) {
+      const [revokedAt, tokenHash] = this.values as [string, string];
+      const session = this.database.authSessions.get(tokenHash);
+      if (session) session.revokedAt = revokedAt;
+      return { meta: { changes: session ? 1 : 0 } };
+    }
     if (normalized.startsWith("delete from intelligence_read_models")) {
       const [collection, before] = this.values as [string, string];
       let changes = 0;
@@ -95,6 +225,10 @@ class FakeD1Statement implements D1PreparedStatementLike {
 export class FakeD1Database implements D1DocumentDatabase {
   readonly readModels = new Map<string, StoredReadModel>();
   readonly auditRows: unknown[][] = [];
+  readonly authUsers = new Map<string, StoredAuthUser>();
+  readonly authRoles = new Map<string, Set<string>>();
+  readonly authSessions = new Map<string, StoredAuthSession>();
+  readonly rateLimits = new Map<string, { count: number; expiresAt: number }>();
 
   prepare(query: string): D1PreparedStatementLike {
     return new FakeD1Statement(this, query);

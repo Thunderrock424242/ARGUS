@@ -23,17 +23,16 @@ Reject, dispute, request-evidence, merge, and separate actions require a reason.
 
 ## Administrative request
 
-The route is unavailable until a server-only token exists. Example local request shape (use an environment variable in the shell; never paste a real token into documentation or history):
+The browser sends its short-lived ARGUS session and the Worker derives the reviewer name and stable actor ID from that session. The bootstrap token remains available only for trusted command-line recovery. Example request shape:
 
 ```http
 POST /api/admin/review
-Authorization: Bearer <server-configured-token>
+Authorization: Bearer <short-lived-argus-session>
 Content-Type: application/json
 
 {
   "action": "dispute",
   "eventId": "evt-example",
-  "reviewerName": "Analyst",
   "reason": "Two independent records disagree on the affected facility."
 }
 ```

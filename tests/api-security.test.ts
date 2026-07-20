@@ -17,7 +17,7 @@ describe("API security primitives", () => {
   const originalAdminToken = process.env.ARGUS_ADMIN_TOKEN;
 
   afterEach(() => {
-    if (originalAdminToken === undefined) delete process.env.ARGUS_ADMIN_TOKEN;
+    if (originalAdminToken === undefined) Reflect.deleteProperty(process.env, "ARGUS_ADMIN_TOKEN");
     else process.env.ARGUS_ADMIN_TOKEN = originalAdminToken;
   });
 
@@ -47,7 +47,7 @@ describe("API security primitives", () => {
   });
 
   it("keeps admin routes disabled without a configured secret", () => {
-    delete process.env.ARGUS_ADMIN_TOKEN;
+    Reflect.deleteProperty(process.env, "ARGUS_ADMIN_TOKEN");
     const request = new Request("https://argus.example/api/admin/review", {
       headers: { authorization: "Bearer guessed" },
     });

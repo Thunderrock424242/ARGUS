@@ -15,6 +15,84 @@ import {
  * JSON while fields used for filtering, joins, and auditability remain typed
  * columns with database constraints.
  */
+export const authUsers = sqliteTable(
+  "auth_users",
+  {
+    id: text("id").primaryKey(),
+    provider: text("provider").notNull(),
+    providerSubject: text("provider_subject").notNull(),
+    login: text("login").notNull(),
+    displayName: text("display_name").notNull(),
+    avatarUrl: text("avatar_url"),
+    status: text("status").notNull().default("active"),
+    createdAt: text("created_at").notNull(),
+    updatedAt: text("updated_at").notNull(),
+    lastAuthenticatedAt: text("last_authenticated_at").notNull(),
+  },
+  (table) => [
+    uniqueIndex("auth_users_provider_subject_unique").on(table.provider, table.providerSubject),
+    index("auth_users_provider_login_idx").on(table.provider, table.login),
+    index("auth_users_status_idx").on(table.status),
+    check("auth_users_provider_check", sql`${table.provider} = 'github'`),
+    check("auth_users_status_check", sql`${table.status} in ('active', 'disabled')`),
+  ],
+);
+
+export const authUserRoles = sqliteTable(
+  "auth_user_roles",
+  {
+    userId: text("user_id")
+      .notNull()
+      .references(() => authUsers.id, { onDelete: "cascade" }),
+    role: text("role").notNull(),
+    grantedAt: text("granted_at").notNull(),
+    grantedBy: text("granted_by").notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.userId, table.role] }),
+    index("auth_user_roles_role_idx").on(table.role, table.userId),
+    check(
+      "auth_user_roles_role_check",
+      sql`${table.role} in ('viewer', 'analyst', 'reviewer', 'source-manager', 'administrator')`,
+    ),
+  ],
+);
+
+export const authSessions = sqliteTable(
+  "auth_sessions",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => authUsers.id, { onDelete: "cascade" }),
+    tokenHash: text("token_hash").notNull(),
+    createdAt: text("created_at").notNull(),
+    expiresAt: text("expires_at").notNull(),
+    lastUsedAt: text("last_used_at").notNull(),
+    revokedAt: text("revoked_at"),
+  },
+  (table) => [
+    uniqueIndex("auth_sessions_token_hash_unique").on(table.tokenHash),
+    index("auth_sessions_user_idx").on(table.userId, table.expiresAt),
+    index("auth_sessions_expiry_idx").on(table.expiresAt, table.revokedAt),
+  ],
+);
+
+export const authRateLimits = sqliteTable(
+  "auth_rate_limits",
+  {
+    keyHash: text("key_hash").notNull(),
+    windowStartedAt: integer("window_started_at").notNull(),
+    count: integer("count").notNull().default(1),
+    expiresAt: integer("expires_at").notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.keyHash, table.windowStartedAt] }),
+    index("auth_rate_limits_expiry_idx").on(table.expiresAt),
+    check("auth_rate_limits_count_check", sql`${table.count} >= 1`),
+  ],
+);
+
 export const intelligenceSources = sqliteTable(
   "intelligence_sources",
   {
@@ -670,3 +748,6 @@ export type AnalystReviewRow = typeof analystReviews.$inferSelect;
 export type AuditLogRow = typeof auditLogs.$inferSelect;
 export type CollectorRunRow = typeof collectorRuns.$inferSelect;
 export type IntelligenceReadModelRow = typeof intelligenceReadModels.$inferSelect;
+export type AuthUserRow = typeof authUsers.$inferSelect;
+export type AuthUserRoleRow = typeof authUserRoles.$inferSelect;
+export type AuthSessionRow = typeof authSessions.$inferSelect;

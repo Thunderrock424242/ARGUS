@@ -55,7 +55,7 @@ ARGUS must never proxy or bypass authentication, paywalls, geographic restrictio
 
 ## Monitoring wall
 
-The monitoring wall uses typed widgets and a reusable layout. The demonstration supports drag reordering, width adjustment, reset, browser-local persistence, and full-screen operations mode. A protected D1 layout endpoint provides durable storage for trusted clients; the public Pages UI deliberately remains browser-local until stable user identity and ownership checks are available.
+The monitoring wall uses typed widgets and a reusable layout. The demonstration supports drag reordering, width adjustment, reset, browser-local persistence, and full-screen operations mode. A role-protected D1 layout endpoint provides durable storage; the Pages wall deliberately remains browser-local until its save/load UI binds layouts to the authenticated owner ID.
 
 ## Public read API
 
@@ -82,4 +82,4 @@ The D1 schema includes graph nodes, relationships, relationship history, impact 
 - Monitoring-wall layouts persist locally in the public UI; the D1 layout endpoint is reserved for authenticated clients.
 - Conflict estimates demonstrate source-specific ranges; no real casualty data is present.
 
-Recommended next work is identity-aware roles for the existing durable commands, controlled collectors and market adapters, normalized ingestion writes, verified camera-source onboarding, terrain/globe performance testing, and a production push-notification gateway.
+Recommended next work is owner-aware layout persistence, controlled collectors and market adapters, normalized ingestion writes, verified camera-source onboarding, terrain/globe performance testing, and a production push-notification gateway.

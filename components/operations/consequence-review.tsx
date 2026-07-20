@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { BookmarkPlus, Check, FilePlus2, GitMerge, Pin, RefreshCw, SearchCheck, X } from "lucide-react";
 import { ConfidenceMeter, StatusBadge, titleCase } from "@/components/domain/argus-ui";
 import type { AnalystRelationshipState, IntelligenceGraphNode, IntelligenceRelationship } from "@/packages/shared/types";
+import { useAuth } from "@/components/auth/auth-provider";
 
 type LocalReview = {
   state: AnalystRelationshipState;
@@ -16,6 +17,8 @@ export function ConsequenceReview({ nodes, relationships }: { nodes: Intelligenc
   const [selectedId, setSelectedId] = useState(candidates[0]?.id ?? "");
   const [reviews, setReviews] = useState<Record<string, LocalReview>>({});
   const [notice, setNotice] = useState("Review a proposed downstream effect. Local demonstration decisions are non-durable.");
+  const [submitting, setSubmitting] = useState(false);
+  const auth = useAuth();
   const selected = candidates.find((relationship) => relationship.id === selectedId);
   const current = selected ? reviews[selected.id] ?? { state: selected.analystState, explanation: selected.explanation, confidence: selected.relationshipConfidence, notes: selected.analystNotes ?? "" } : undefined;
   const nodeById = useMemo(() => new Map(nodes.map((node) => [node.id, node])), [nodes]);
@@ -25,10 +28,41 @@ export function ConsequenceReview({ nodes, relationships }: { nodes: Intelligenc
     setReviews((existing) => ({ ...existing, [selected.id]: { ...current, ...patch } }));
   }
 
-  function decide(state: AnalystRelationshipState) {
-    if (!selected) return;
-    update({ state });
-    setNotice(`${selected.id} marked ${state} in this demonstration session. An audit command would be required for durable mutation.`);
+  async function decide(state: AnalystRelationshipState) {
+    if (!selected || !current || submitting) return;
+    if (!auth.principal) {
+      setNotice("Sign in with GitHub before recording a durable relationship decision.");
+      return;
+    }
+    if (!auth.can("relationships:review")) {
+      setNotice("The reviewer or administrator role is required for relationship decisions.");
+      return;
+    }
+    setSubmitting(true);
+    setNotice(`Recording ${state} with the ARGUS Worker…`);
+    try {
+      const response = await auth.authenticatedFetch(`/api/admin/relationships/${encodeURIComponent(selected.id)}`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          analystState: state,
+          reason: current.notes.trim() || `Relationship marked ${state} through the ARGUS consequence review.`,
+          analystNotes: current.notes || undefined,
+          relationshipConfidence: current.confidence,
+        }),
+      });
+      if (!response.ok) {
+        const payload = (await response.json()) as { error?: { message?: string } };
+        throw new Error(payload.error?.message ?? "The relationship decision was not accepted.");
+      }
+      const payload = (await response.json()) as { data: { audit: { id: string } } };
+      update({ state });
+      setNotice(`${selected.id} was durably marked ${state}. Audit ${payload.data.audit.id}.`);
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "The relationship decision could not be recorded.");
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   function auxiliary(action: string) {
@@ -54,7 +88,7 @@ export function ConsequenceReview({ nodes, relationships }: { nodes: Intelligenc
             </div>
             <aside className="space-y-4"><div className="rounded-lg border border-white/[.08] bg-white/[.018] p-4"><ConfidenceMeter score={current.confidence} /><label className="mt-4 block text-[9px] uppercase tracking-[.13em] text-slate-500">Adjust relationship confidence<input className="mt-3 w-full accent-cyan-300" type="range" min="0" max="100" value={current.confidence} onChange={(event) => update({ confidence: Number(event.target.value) })} /></label><dl className="mt-4 grid grid-cols-2 gap-2"><Meta label="Exposure" value={`${selected.exposureConfidence ?? "—"}%`} /><Meta label="Causal" value={`${selected.causalConfidence ?? "—"}%`} /><Meta label="Market anomaly" value={`${selected.marketAnomalyScore ?? "—"}%`} /><Meta label="Model" value={selected.modelVersion} /></dl></div><div className="rounded-lg border border-amber-300/15 bg-amber-300/[.035] p-4 text-[10px] leading-5 text-slate-400"><strong className="text-amber-200">Causality boundary.</strong> Temporal order, geographic overlap, asset exposure, and market movement do not prove that one node caused another.</div></aside>
           </div>
-          <div className="border-t border-white/[.08] bg-[#0d161f] p-4"><div className="flex flex-wrap gap-2"><Action icon={<Check size={13} />} label="Confirm" primary onClick={() => decide("confirmed")} /><Action icon={<X size={13} />} label="Reject" danger onClick={() => decide("rejected")} /><Action icon={<SearchCheck size={13} />} label="Mark disputed" onClick={() => decide("disputed")} /><Action icon={<RefreshCw size={13} />} label="Request evidence" onClick={() => auxiliary("More evidence requested")} /><Action icon={<GitMerge size={13} />} label="Merge link" onClick={() => auxiliary("Merge candidate queued")} /><Action icon={<FilePlus2 size={13} />} label="Convert to event" onClick={() => auxiliary("Event conversion queued")} /><Action icon={<BookmarkPlus size={13} />} label="Watchlist" onClick={() => auxiliary("Watchlist addition queued")} /><Action icon={<Pin size={13} />} label="Pin priority" onClick={() => auxiliary("Priority pin queued")} /></div><p className="mt-3 text-[10px] text-slate-500" role="status">{notice}</p></div>
+          <div className="border-t border-white/[.08] bg-[#0d161f] p-4"><div className="flex flex-wrap gap-2"><Action icon={<Check size={13} />} label="Confirm" primary disabled={submitting} onClick={() => void decide("confirmed")} /><Action icon={<X size={13} />} label="Reject" danger disabled={submitting} onClick={() => void decide("rejected")} /><Action icon={<SearchCheck size={13} />} label="Mark disputed" disabled={submitting} onClick={() => void decide("disputed")} /><Action icon={<RefreshCw size={13} />} label="Request evidence" onClick={() => auxiliary("More evidence requested")} /><Action icon={<GitMerge size={13} />} label="Merge link" onClick={() => auxiliary("Merge candidate queued")} /><Action icon={<FilePlus2 size={13} />} label="Convert to event" onClick={() => auxiliary("Event conversion queued")} /><Action icon={<BookmarkPlus size={13} />} label="Watchlist" onClick={() => auxiliary("Watchlist addition queued")} /><Action icon={<Pin size={13} />} label="Pin priority" onClick={() => auxiliary("Priority pin queued")} /></div><p className="mt-3 text-[10px] text-slate-500" role="status">{notice}</p></div>
         </div> : <div className="flex min-h-[720px] items-center justify-center p-10 text-center text-sm text-slate-600">No consequence hypotheses are awaiting review.</div>}
       </div>
     </section>
@@ -69,6 +103,6 @@ function Meta({ label, value }: { label: string; value: string }) {
   return <div><dt className="text-[8px] uppercase tracking-[.12em] text-slate-600">{label}</dt><dd className="mt-1 text-[10px] text-slate-300">{value}</dd></div>;
 }
 
-function Action({ icon, label, onClick, primary, danger }: { icon: React.ReactNode; label: string; onClick: () => void; primary?: boolean; danger?: boolean }) {
-  return <button type="button" className={`button ${primary ? "button-primary" : ""} ${danger ? "border-red-300/20 text-red-200" : ""}`} onClick={onClick}>{icon}{label}</button>;
+function Action({ icon, label, onClick, primary, danger, disabled }: { icon: React.ReactNode; label: string; onClick: () => void; primary?: boolean; danger?: boolean; disabled?: boolean }) {
+  return <button type="button" disabled={disabled} className={`button ${primary ? "button-primary" : ""} ${danger ? "border-red-300/20 text-red-200" : ""}`} onClick={onClick}>{icon}{label}</button>;
 }

@@ -31,6 +31,30 @@ export class MemoryRateLimitStore implements RateLimitStore {
   }
 }
 
+/** Durable fixed-window counters for production Worker requests. Keys are hashed before storage. */
+export class D1RateLimitStore implements RateLimitStore {
+  constructor(private readonly database: D1DocumentDatabase) {}
+
+  async increment(key: string, windowStartedAt: number, expiresAt: number): Promise<number> {
+    const keyHash = await sha256Hex(key);
+    const row = await this.database
+      .prepare(
+        `INSERT INTO auth_rate_limits (key_hash, window_started_at, count, expires_at)
+         VALUES (?, ?, 1, ?)
+         ON CONFLICT(key_hash, window_started_at) DO UPDATE SET
+           count = auth_rate_limits.count + 1,
+           expires_at = excluded.expires_at
+         RETURNING count`,
+      )
+      .bind(keyHash, windowStartedAt, expiresAt)
+      .first<{ count: number }>();
+    if (!row || !Number.isInteger(row.count)) {
+      throw new Error("The durable rate-limit counter could not be updated.");
+    }
+    return row.count;
+  }
+}
+
 export interface RateLimitDecision {
   allowed: boolean;
   limit: number;
@@ -83,8 +107,5 @@ export function requestRateLimitKey(request: Request, scope: string): string {
   return `${scope}:${client}`;
 }
 
-export const adminRateLimiter = new FixedWindowRateLimiter(
-  new MemoryRateLimitStore(),
-  20,
-  60_000,
-);
+import { sha256Hex } from "@/lib/auth/tokens";
+import type { D1DocumentDatabase } from "@/packages/database/d1-read-model-provider";

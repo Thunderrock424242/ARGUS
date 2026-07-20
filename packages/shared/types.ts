@@ -377,7 +377,8 @@ export type AuditAction =
   | "alert-dismissed"
   | "monitoring-layout-saved"
   | "read-model-seeded"
-  | "retention-enforced";
+  | "retention-enforced"
+  | "identity-roles-updated";
 
 export interface AuditLogEntry {
   id: string;
@@ -399,7 +400,8 @@ export interface AuditLogEntry {
     | "conflict"
     | "alert"
     | "monitoring-layout"
-    | "read-model";
+    | "read-model"
+    | "user";
   targetId: string;
   summary: string;
   before?: unknown;

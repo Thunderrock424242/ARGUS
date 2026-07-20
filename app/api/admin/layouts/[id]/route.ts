@@ -1,4 +1,4 @@
-import { requireAdmin } from "@/lib/api/admin-guard";
+import { actorForRequest, requirePermission } from "@/lib/api/admin-guard";
 import { DEMONSTRATION_DATA_LABEL } from "@/lib/api/read-models";
 import { jsonData, jsonError, requestIdFrom } from "@/lib/api/responses";
 import { monitoringLayoutSaveSchema, routeIdentifierSchema } from "@/lib/api/schemas";
@@ -14,7 +14,7 @@ interface LayoutRouteContext {
 
 export async function PUT(request: Request, context: LayoutRouteContext): Promise<Response> {
   const requestId = requestIdFrom(request);
-  const guard = await requireAdmin(request, "monitoring-layout", requestId, context.adminToken);
+  const guard = await requirePermission(request, "layouts:write", "monitoring-layout", requestId, context);
   if (!guard.authorized) return guard.response;
   if (!context.database) return jsonError(503, "durable_store_unavailable", "D1 is required for monitoring layout writes.", { requestId, headers: guard.rateLimitHeaders });
   const id = routeIdentifierSchema.safeParse((await context.params).id);
@@ -22,10 +22,10 @@ export async function PUT(request: Request, context: LayoutRouteContext): Promis
   const body = await validateJsonBody(request, monitoringLayoutSaveSchema);
   if (!body.success) return jsonError(body.status, body.code, body.message, { details: body.details, requestId, headers: guard.rateLimitHeaders });
   try {
-    const result = await saveDurableMonitoringLayout(context.database, { id: id.data, name: body.data.name, widgets: body.data.widgets, updatedAt: new Date().toISOString(), dataClassification: "demonstration", demoDataLabel: DEMONSTRATION_DATA_LABEL }, body.data.reviewerName, requestId);
+    const actor = actorForRequest(guard.principal, body.data.reviewerName);
+    const result = await saveDurableMonitoringLayout(context.database, { id: id.data, name: body.data.name, widgets: body.data.widgets, updatedAt: new Date().toISOString(), dataClassification: "demonstration", demoDataLabel: DEMONSTRATION_DATA_LABEL }, actor.name, requestId, actor.id);
     return jsonData({ ...result, durability: "d1" }, { headers: guard.rateLimitHeaders, meta: { requestId } });
   } catch {
     return jsonError(503, "layout_save_failed", "The monitoring layout could not be persisted.", { requestId, headers: guard.rateLimitHeaders });
   }
 }
-
