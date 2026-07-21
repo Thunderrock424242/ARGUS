@@ -14,7 +14,7 @@ import type {
   SourceReport,
 } from "@/packages/shared/types";
 import { LiveReportStream } from "./live-report-stream";
-import { browserDemoDataEnabled } from "@/lib/config/demo-mode";
+import { browserDemoDataEnabled, recordsVisibleInDemoMode } from "@/lib/config/demo-mode";
 
 const operationalLayers = [
   { id: "security", label: "Security", categories: "Conflict · unrest · sanctions", tone: "bg-red-400" },
@@ -89,12 +89,28 @@ export function GlobalOperationsView({
     })
       .then(async (response) => {
         if (!response.ok) throw new Error(`ARGUS Worker returned ${response.status}.`);
-        const payload = await response.json() as { data?: Partial<OperationsRuntimeData> };
+        const payload = await response.json() as {
+          data?: Partial<OperationsRuntimeData>;
+          meta?: { demoDataEnabled?: boolean };
+        };
         const data = payload.data;
         if (!data || !Array.isArray(data.events) || !Array.isArray(data.reports) || !Array.isArray(data.sources) || !Array.isArray(data.relationships) || !Array.isArray(data.graphNodes) || !Array.isArray(data.marketImpacts) || !Array.isArray(data.alerts) || !data.metrics) {
           throw new Error("ARGUS Worker returned an invalid operations snapshot.");
         }
-        setRuntimeData({ ...data, reports: [...data.reports].sort((left, right) => right.collectedAt.localeCompare(left.collectedAt)) } as OperationsRuntimeData);
+        const effectiveDemoEnabled = browserDemoDataEnabled && payload.meta?.demoDataEnabled !== false;
+        const visibleReports = recordsVisibleInDemoMode(data.reports, effectiveDemoEnabled) ?? [];
+        setRuntimeData({
+          events: recordsVisibleInDemoMode(data.events, effectiveDemoEnabled) ?? [],
+          reports: visibleReports.sort((left, right) => right.collectedAt.localeCompare(left.collectedAt)),
+          sources: recordsVisibleInDemoMode(data.sources, effectiveDemoEnabled) ?? [],
+          relationships: recordsVisibleInDemoMode(data.relationships, effectiveDemoEnabled) ?? [],
+          graphNodes: recordsVisibleInDemoMode(data.graphNodes, effectiveDemoEnabled) ?? [],
+          marketImpacts: recordsVisibleInDemoMode(data.marketImpacts, effectiveDemoEnabled) ?? [],
+          alerts: recordsVisibleInDemoMode(data.alerts, effectiveDemoEnabled) ?? [],
+          metrics: !effectiveDemoEnabled && data.metrics.dataClassification === "demonstration"
+            ? metrics
+            : data.metrics,
+        });
         setRuntimeDataSource(response.headers.get("x-argus-data-store") === "d1" ? "d1" : "worker-fixtures");
       })
       .catch((error: unknown) => {
@@ -102,7 +118,7 @@ export function GlobalOperationsView({
         setRuntimeDataSource("degraded");
       });
     return () => controller.abort();
-  }, []);
+  }, [metrics]);
   const priorityEvents = useMemo(() => runtimeData.events.filter((event) => event.priority).sort((left, right) => right.severity - left.severity), [runtimeData.events]);
   const reviewRelationships = runtimeData.relationships.filter((relationship) => relationship.analystState === "needs-review").length;
   const marketAnomalies = runtimeData.marketImpacts.filter((assessment) => assessment.marketAnomalyScore >= 70).length;
