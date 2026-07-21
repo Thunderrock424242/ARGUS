@@ -40,9 +40,9 @@ jobs:
           # This is a public API origin, not a credential. Pin the canonical
           # Worker URL so a stale repository-variable placeholder cannot ship.
           VITE_ARGUS_API_URL: https://argus-brain.thunderrock-labs.workers.dev
-          # Repository variable lets the published Pages build disable every
-          # bundled demonstration-only view without exposing a secret.
-          VITE_ARGUS_DEMO_ENABLED: ${{ vars.ARGUS_DEMO_ENABLED || 'false' }}
+          # Production Pages is pinned to live-data mode. Local and test builds
+          # can still opt into fixtures with VITE_ARGUS_DEMO_ENABLED=true.
+          VITE_ARGUS_DEMO_ENABLED: 'false'
 
       - name: Upload GitHub Pages artifact
         uses: actions/upload-pages-artifact@v5
