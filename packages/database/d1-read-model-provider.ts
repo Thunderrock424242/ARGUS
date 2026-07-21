@@ -1,5 +1,6 @@
 import {
   DEFAULT_DATASET,
+  EMPTY_DATASET,
   MockIntelligenceDataProvider,
   type MockProviderDataset,
 } from "@/packages/database/provider";
@@ -320,12 +321,16 @@ export async function seedDemonstrationReadModels(
  */
 export class D1IntelligenceDataProvider implements IntelligenceDataProvider {
   private readonly fallback: IntelligenceDataProvider;
+  private readonly demoEnabled: boolean;
 
   constructor(
     private readonly database: D1DocumentDatabase,
-    fallbackDataset: MockProviderDataset = DEFAULT_DATASET,
+    options: { demoEnabled?: boolean; fallbackDataset?: MockProviderDataset } = {},
   ) {
-    this.fallback = new MockIntelligenceDataProvider(fallbackDataset);
+    this.demoEnabled = options.demoEnabled ?? true;
+    this.fallback = new MockIntelligenceDataProvider(
+      this.demoEnabled ? options.fallbackDataset ?? DEFAULT_DATASET : EMPTY_DATASET,
+    );
   }
 
   private async collection<T>(
@@ -333,7 +338,12 @@ export class D1IntelligenceDataProvider implements IntelligenceDataProvider {
     fallback: () => Promise<T[]>,
   ): Promise<T[]> {
     try {
-      const records = await readModelCollection<T>(this.database, collection);
+      const records = (await readModelCollection<T>(this.database, collection)).filter((record) =>
+        this.demoEnabled ||
+        !record ||
+        typeof record !== "object" ||
+        (record as { dataClassification?: string }).dataClassification !== "demonstration"
+      );
       return records.length ? records : fallback();
     } catch {
       return fallback();
@@ -351,6 +361,7 @@ export class D1IntelligenceDataProvider implements IntelligenceDataProvider {
         READ_MODEL_COLLECTIONS.events,
         slug,
       );
+      if (record && (!this.demoEnabled && record.dataClassification === "demonstration")) return null;
       return record ?? this.fallback.getEventBySlug(slug);
     } catch {
       return this.fallback.getEventBySlug(slug);

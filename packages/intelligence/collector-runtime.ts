@@ -147,6 +147,8 @@ export async function executeCollectorJob(
     signal?: AbortSignal;
     retryPolicy?: Partial<CollectorRetryPolicy>;
     deterministicJitter?: number;
+    dataClassification?: CollectorRun["dataClassification"];
+    mode?: "dry-run" | "live";
   } = {},
 ): Promise<CollectorExecutionResult> {
   if (job.collectorId !== collector.id || job.sourceId !== source.id) {
@@ -184,7 +186,11 @@ export async function executeCollectorJob(
         retryCount: job.attempt - 1,
         durationMs: Math.max(0, completedAtDate.getTime() - startedAtDate.getTime()),
         requestId,
-        dataClassification: "demonstration",
+        dataClassification: options.dataClassification ?? "demonstration",
+        mode: options.mode ?? "dry-run",
+        scheduledFor: job.scheduledFor,
+        attempt: job.attempt,
+        networkAccessed: options.mode === "live",
       },
       reports,
       deadLettered: false,
@@ -229,7 +235,12 @@ export async function executeCollectorJob(
         durationMs: Math.max(0, completedAtDate.getTime() - startedAtDate.getTime()),
         errorMessage: message,
         requestId,
-        dataClassification: "demonstration",
+        dataClassification: options.dataClassification ?? "demonstration",
+        mode: options.mode ?? "dry-run",
+        scheduledFor: job.scheduledFor,
+        attempt: job.attempt,
+        nextRetryAt: retryJob?.scheduledFor,
+        networkAccessed: options.mode === "live",
       },
       reports: [],
       retryJob,

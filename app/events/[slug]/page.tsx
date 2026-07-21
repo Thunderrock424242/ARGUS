@@ -8,20 +8,20 @@ import { useRuntimeData } from "@/components/runtime/runtime-data-provider";
 
 export default function EventDossierPage({ slug }: { slug: string }) {
   const runtime = useRuntimeData();
-  const events = runtime.events.length ? runtime.events : demoEvents;
+  const events = runtime.events.length || !runtime.demoEnabled ? runtime.events : demoEvents;
   const event = events.find((item) => item.slug === slug);
   if (!event) return <NotFound />;
 
-  const reports = (runtime.reports.length ? runtime.reports : demoReports).filter((report) => event.sourceReportIds.includes(report.id) || report.eventId === event.id);
+  const reports = (runtime.reports.length || !runtime.demoEnabled ? runtime.reports : demoReports).filter((report) => event.sourceReportIds.includes(report.id) || report.eventId === event.id);
   const relatedEvents = events.filter((candidate) => event.relatedEventIds.includes(candidate.id));
-  const timeline = (runtime.timelineEntries.length ? runtime.timelineEntries : demoTimelineEntries).filter((entry) => entry.eventId === event.id).sort((a, b) => new Date(a.occurredAt).getTime() - new Date(b.occurredAt).getTime());
-  const auditEntries = runtime.auditEntries.length ? runtime.auditEntries : demoAuditEntries;
+  const timeline = (runtime.timelineEntries.length || !runtime.demoEnabled ? runtime.timelineEntries : demoTimelineEntries).filter((entry) => entry.eventId === event.id).sort((a, b) => new Date(a.occurredAt).getTime() - new Date(b.occurredAt).getTime());
+  const auditEntries = runtime.auditEntries.length || !runtime.demoEnabled ? runtime.auditEntries : demoAuditEntries;
   const audit = auditEntries.filter((entry) => entry.targetId === event.id || event.confirmedFacts.some((claim) => claim.id === entry.targetId));
-  const graphNodes = runtime.graphNodes.length ? runtime.graphNodes : demoGraphNodes;
-  const relationships = runtime.relationships.length ? runtime.relationships : demoRelationships;
+  const graphNodes = runtime.graphNodes.length || !runtime.demoEnabled ? runtime.graphNodes : demoGraphNodes;
+  const relationships = runtime.relationships.length || !runtime.demoEnabled ? runtime.relationships : demoRelationships;
   const eventNode = graphNodes.find((node) => node.type === "event" && node.eventId === event.id);
   const impactRelationships = eventNode ? relationships.filter((relationship) => relationship.sourceNodeId === eventNode.id || relationship.targetNodeId === eventNode.id) : [];
-  const marketImpacts = (runtime.marketImpacts.length ? runtime.marketImpacts : demoMarketImpacts).filter((assessment) => assessment.eventId === event.id);
+  const marketImpacts = (runtime.marketImpacts.length || !runtime.demoEnabled ? runtime.marketImpacts : demoMarketImpacts).filter((assessment) => assessment.eventId === event.id);
 
   return (
     <main className="route-page page-stack space-y-5 p-4 sm:p-6 xl:p-8">
@@ -38,7 +38,7 @@ export default function EventDossierPage({ slug }: { slug: string }) {
           ["Status", titleCase(event.status)], ["Confidence", `${event.automatedConfidence}%`], ["Supporting sources", event.supportingSourceCount], ["Official sources", event.officialSourceCount], ["Contradictions", event.contradictionCount], ["Reports", event.sourceReportIds.length], ["Watchlists", event.watchlistIds.length], ["Updated", new Date(event.lastUpdatedAt).toLocaleDateString("en", { month: "short", day: "2-digit", timeZone: "UTC" })],
         ].map(([label, value]) => <div key={String(label)} className="rounded-lg border border-white/[.08] bg-[#101820]/80 p-3"><p className="text-[8px] font-bold uppercase tracking-[.14em] text-slate-600">{label}</p><p className="mt-2 text-sm font-semibold text-slate-200">{value}</p></div>)}
       </section>
-      <EventDossier event={event} reports={reports} sources={runtime.sources.length ? runtime.sources : demoSources} relatedEvents={relatedEvents} timeline={timeline} audit={audit} graphNodes={graphNodes} relationships={impactRelationships} marketAssets={runtime.marketAssets.length ? runtime.marketAssets : demoMarketAssets} marketImpacts={marketImpacts} />
+      <EventDossier event={event} reports={reports} sources={runtime.sources.length || !runtime.demoEnabled ? runtime.sources : demoSources} relatedEvents={relatedEvents} timeline={timeline} audit={audit} graphNodes={graphNodes} relationships={impactRelationships} marketAssets={runtime.marketAssets.length || !runtime.demoEnabled ? runtime.marketAssets : demoMarketAssets} marketImpacts={marketImpacts} />
     </main>
   );
 }

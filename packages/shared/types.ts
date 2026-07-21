@@ -1,4 +1,4 @@
-export type DemoDataClassification = "demonstration";
+export type DemoDataClassification = "demonstration" | "public-information";
 
 export type EventCategory =
   | "conflict"
@@ -64,7 +64,8 @@ export type ConfidenceFactorCode =
   | "missing-time-or-location"
   | "sensational-language"
   | "stale-evidence"
-  | "unsupported-social-claim";
+  | "unsupported-social-claim"
+  | "public-review-ceiling";
 
 export interface ConfidenceFactor {
   id: string;
@@ -171,6 +172,14 @@ export interface SourceReport {
   rawPayload: unknown;
   contentHash: string;
   processingStatus: ReportProcessingStatus;
+  /** Review-controlled ceiling applied to public-information evidence. */
+  confidence?: number;
+  /** Public reports remain needs-review until an explicit analyst decision. */
+  verificationState?: VerificationState;
+  confidenceUpdatedAt?: string;
+  confidenceUpdatedById?: string;
+  confidenceUpdatedByName?: string;
+  confidenceUpdateReason?: string;
   duplicateOfReportId?: string;
   rejectionReason?: string;
   dataClassification: DemoDataClassification;
@@ -226,6 +235,11 @@ export interface IngestionSubmission {
   reviewedById?: string;
   reviewedByName?: string;
   reviewReason?: string;
+  confidence: number;
+  confidenceUpdatedAt?: string;
+  confidenceUpdatedById?: string;
+  confidenceUpdatedByName?: string;
+  confidenceUpdateReason?: string;
   provenance: IngestionProvenance;
   dataClassification: DemoDataClassification;
   demoDataLabel: string;
@@ -440,6 +454,7 @@ export type AuditAction =
   | "ingestion-approved"
   | "ingestion-rejected"
   | "ingestion-retried"
+  | "ingestion-confidence-updated"
   | "relationship-confirmed"
   | "relationship-rejected"
   | "relationship-disputed"
@@ -541,6 +556,11 @@ export interface CollectorRun {
   errorMessage?: string;
   requestId: string;
   dataClassification: DemoDataClassification;
+  mode?: "dry-run" | "live";
+  scheduledFor?: string;
+  attempt?: number;
+  nextRetryAt?: string;
+  networkAccessed?: boolean;
 }
 
 export interface RegionalActivityMetric {

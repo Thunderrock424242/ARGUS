@@ -1,4 +1,4 @@
-import { lazy, StrictMode, Suspense, useEffect } from "react";
+import { lazy, StrictMode, Suspense, useEffect, type ReactNode } from "react";
 import { createRoot } from "react-dom/client";
 import {
   BrowserRouter,
@@ -12,6 +12,8 @@ import "@/app/globals.css";
 import { AppShell } from "@/components/shell/app-shell";
 import { AuthProvider } from "@/components/auth/auth-provider";
 import { RuntimeDataProvider } from "@/components/runtime/runtime-data-provider";
+import { DemoDisabled } from "@/components/ui/demo-disabled";
+import { browserDemoDataEnabled } from "@/lib/config/demo-mode";
 
 const AetherPage = lazy(() => import("@/app/aether/page"));
 const AlertsPage = lazy(() => import("@/app/alerts/page"));
@@ -82,6 +84,10 @@ function BriefRoute() {
   return <BriefPage slug={slug} />;
 }
 
+function DemoOnlyRoute({ feature, children }: { feature: string; children: ReactNode }) {
+  return browserDemoDataEnabled ? children : <DemoDisabled feature={feature} />;
+}
+
 function ArgusRoutes() {
   return (
     <>
@@ -90,25 +96,25 @@ function ArgusRoutes() {
         <Suspense fallback={<Loading />}>
           <Routes>
             <Route path="/" element={<CommandCenterPage />} />
-            <Route path="/dashboard" element={<DashboardPage />} />
-            <Route path="/map" element={<GlobalMapPage />} />
+            <Route path="/dashboard" element={<DemoOnlyRoute feature="Command Center"><DashboardPage /></DemoOnlyRoute>} />
+            <Route path="/map" element={<DemoOnlyRoute feature="Global Map"><GlobalMapPage /></DemoOnlyRoute>} />
             <Route path="/events" element={<EventsPage />} />
             <Route path="/events/:slug" element={<EventRoute />} />
             <Route path="/relationships" element={<RelationshipsPage />} />
             <Route path="/consequences" element={<ConsequencesPage />} />
-            <Route path="/conflicts" element={<ConflictsPage />} />
-            <Route path="/timeline" element={<TimelinePage />} />
+            <Route path="/conflicts" element={<DemoOnlyRoute feature="Conflict profiles"><ConflictsPage /></DemoOnlyRoute>} />
+            <Route path="/timeline" element={<DemoOnlyRoute feature="Timeline"><TimelinePage /></DemoOnlyRoute>} />
             <Route path="/alerts" element={<AlertsPage />} />
-            <Route path="/live-feeds" element={<LiveFeedsPage />} />
-            <Route path="/wall" element={<MonitoringWallPage />} />
-            <Route path="/briefs" element={<BriefsPage />} />
-            <Route path="/briefs/:slug" element={<BriefRoute />} />
-            <Route path="/watchlists" element={<WatchlistsPage />} />
-            <Route path="/sources" element={<SourcesPage />} />
+            <Route path="/live-feeds" element={<DemoOnlyRoute feature="Live feeds"><LiveFeedsPage /></DemoOnlyRoute>} />
+            <Route path="/wall" element={<DemoOnlyRoute feature="Monitoring wall"><MonitoringWallPage /></DemoOnlyRoute>} />
+            <Route path="/briefs" element={<DemoOnlyRoute feature="Intelligence briefs"><BriefsPage /></DemoOnlyRoute>} />
+            <Route path="/briefs/:slug" element={<DemoOnlyRoute feature="Intelligence brief"><BriefRoute /></DemoOnlyRoute>} />
+            <Route path="/watchlists" element={<DemoOnlyRoute feature="Watchlists"><WatchlistsPage /></DemoOnlyRoute>} />
+            <Route path="/sources" element={<DemoOnlyRoute feature="Source manager"><SourcesPage /></DemoOnlyRoute>} />
             <Route path="/ingestion" element={<IngestionPage />} />
             <Route path="/review" element={<ReviewPage />} />
-            <Route path="/aether" element={<AetherPage />} />
-            <Route path="/system" element={<SystemPage />} />
+            <Route path="/aether" element={<DemoOnlyRoute feature="Aether"><AetherPage /></DemoOnlyRoute>} />
+            <Route path="/system" element={<DemoOnlyRoute feature="System fixtures"><SystemPage /></DemoOnlyRoute>} />
             <Route path="/settings" element={<SettingsPage />} />
             <Route path="*" element={<NotFound />} />
           </Routes>

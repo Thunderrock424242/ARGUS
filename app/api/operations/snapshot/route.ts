@@ -3,7 +3,7 @@ import { intelligenceDataProvider } from "@/packages/database/provider";
 import { demoMetrics } from "@/packages/shared/demo-data";
 import type { PlatformMetrics } from "@/packages/shared/types";
 
-export async function GET(request: Request): Promise<Response> {
+export async function GET(request: Request, context: { demoDataEnabled?: boolean } = {}): Promise<Response> {
   const requestId = requestIdFrom(request);
   try {
     const [events, reports, sources, relationships, graphNodes, relationshipHistory, marketAssets, marketImpacts, stateHistory, alerts] = await Promise.all([
@@ -38,7 +38,9 @@ export async function GET(request: Request): Promise<Response> {
       ...report,
       rawPayload: { redacted: true },
     }));
-    return jsonData({ events, reports: safeReports, sources, relationships, graphNodes, relationshipHistory, marketAssets, marketImpacts, stateHistory, alerts, metrics }, { meta: { requestId, dataClassification: "demonstration", source: "runtime-provider" } });
+    const hasDemonstrationData = [events, reports, sources, relationships, graphNodes, marketAssets, marketImpacts, alerts]
+      .some((records) => records.some((record) => record.dataClassification === "demonstration"));
+    return jsonData({ events, reports: safeReports, sources, relationships, graphNodes, relationshipHistory, marketAssets, marketImpacts, stateHistory, alerts, metrics }, { meta: { requestId, dataClassification: hasDemonstrationData ? "demonstration" : "public-information", demoDataEnabled: context.demoDataEnabled ?? true, source: "runtime-provider" } });
   } catch {
     return jsonError(503, "operations_snapshot_unavailable", "The operations snapshot is temporarily unavailable.", { requestId });
   }

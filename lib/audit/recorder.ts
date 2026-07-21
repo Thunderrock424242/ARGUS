@@ -76,6 +76,7 @@ export interface CreateAuditEntryInput {
   occurredAt?: string;
   actorType?: AuditLogEntry["actorType"];
   actorId?: string;
+  dataClassification?: AuditLogEntry["dataClassification"];
 }
 
 function actorIdentifier(name: string, actorType: AuditLogEntry["actorType"]): string {
@@ -98,7 +99,7 @@ export function createAuditEntry(input: CreateAuditEntryInput): AuditLogEntry {
     after: input.after,
     reason: input.reason,
     correlationId: input.requestId,
-    dataClassification: "demonstration",
+    dataClassification: input.dataClassification ?? "demonstration",
   };
 }
 

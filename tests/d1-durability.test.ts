@@ -34,6 +34,16 @@ describe("D1-backed ARGUS operations", () => {
     expect(await provider.getEventBySlug(DEFAULT_DATASET.events[0].slug)).toMatchObject({ ...DEFAULT_DATASET.events[0], recordVersion: 1 });
   });
 
+  it("filters seeded demonstration records when demo mode is disabled", async () => {
+    const database = new FakeD1Database();
+    await seedDemonstrationReadModels(database);
+    const provider = new D1IntelligenceDataProvider(database, { demoEnabled: false });
+
+    expect(await provider.getEvents()).toEqual([]);
+    expect(await provider.getReports()).toEqual([]);
+    expect(await provider.getEventBySlug(DEFAULT_DATASET.events[0].slug)).toBeNull();
+  });
+
   it("persists event decisions, history, and audit records in one D1 batch", async () => {
     const database = new FakeD1Database();
     await seedDemonstrationReadModels(database);

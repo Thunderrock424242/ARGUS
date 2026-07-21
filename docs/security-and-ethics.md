@@ -11,7 +11,7 @@ ARGUS handles hostile public content and potentially consequential analysis. Sec
 - No-store safe JSON responses with credential-field redaction and generic internal errors
 - Bounded administrative request limiting behind a replaceable store interface
 - URL rules for credentials, schemes, local/private/link-local addresses, unsafe ports, and host allowlists
-- Dry-run-only web collector execution; no request field can enable live mode
+- Identity-gated live execution only for compile-time official source IDs; no request field can supply a fetch URL or credential
 - Injected collector transport, redirect refusal, time/size caps, and address-verification hooks
 - Versioned D1 read models with batched state/history/audit writes and scheduled bounded retention
 - Worker CSP, anti-framing, no-sniff, referrer, permissions, cross-origin, and HTTPS transport headers
@@ -27,7 +27,7 @@ Credential redaction is a last defense, not permission to put secrets in respons
 
 Validation must happen when a source is proposed and again immediately before every network request. Resolve all addresses, reject if any answer is non-public, pin and verify the connected address, and repeat validation for every allowed redirect (the current policy rejects redirects). Block cloud metadata, loopback, private, carrier-grade NAT, link-local, multicast, documentation, unique-local IPv6, and IPv4-mapped variants. Use fixed host allowlists for official adapters.
 
-The web API never accepts an arbitrary URL for immediate fetching. Source testing belongs in a queued worker with egress controls and an audit record.
+The web API never accepts an arbitrary URL for immediate fetching. The official pilot maps a requested source ID to a compile-time host/path rule and an audited D1 run. User-configurable source testing still belongs in a queued worker with controlled egress.
 
 Camera and market-provider URLs use the same rule: validate on onboarding and immediately before every server-side request, pin public DNS results, reject redirects unless individually revalidated, and enforce response-size and time limits. The frontend never receives a provider credential and never proxies a restricted camera.
 
@@ -52,6 +52,7 @@ ARGUS operators and contributors must:
 - preserve source attribution and original timestamps
 - distinguish observed fact, reported claim, analysis, speculation, and analyst judgment
 - describe confidence as evidence-rule coverage, never certainty
+- keep new public information at the 25% low-confidence ceiling until review or an audited administrator adjustment
 - avoid collecting or exposing private personal information
 - avoid targeting private individuals or facilitating harassment
 - minimize sensitive location and identity data

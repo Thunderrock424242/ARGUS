@@ -1,5 +1,6 @@
 import Link from "@/components/navigation/link";
 import type { ReactNode } from "react";
+import { browserDemoDataEnabled } from "@/lib/config/demo-mode";
 
 export const panelClass =
   "panel rounded-xl border border-white/10 bg-[#101820]/90 shadow-[0_18px_50px_rgba(0,0,0,.22)]";
@@ -13,6 +14,7 @@ export const buttonClass =
 export const primaryButtonClass = `${buttonClass} button-primary border-cyan-300/30 bg-cyan-300/10 text-cyan-100 hover:bg-cyan-300/15`;
 
 export function DemoBanner({ compact = false }: { compact?: boolean }) {
+  if (!browserDemoDataEnabled) return null;
   return (
     <aside
       className={`demo-banner flex items-start gap-3 rounded-lg border border-amber-300/20 bg-amber-300/[.07] ${compact ? "px-3 py-2" : "px-4 py-3"}`}

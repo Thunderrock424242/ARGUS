@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { GET as listIngestion, POST as submitIngestion } from "@/app/api/admin/ingestion/route";
 import { POST as reviewIngestion } from "@/app/api/admin/ingestion/[id]/route";
+import { POST as adjustIngestionConfidence } from "@/app/api/admin/ingestion/[id]/confidence/route";
 import { demoSources } from "@/packages/shared/demo-data";
 import { FakeD1Database } from "./helpers/fake-d1";
 
@@ -40,15 +41,22 @@ describe("durable ingestion pipeline", () => {
     const first = await submitIngestion(request("/api/admin/ingestion", intake()), context);
     expect(first.status).toBe(201);
     const firstPayload = await payload<{
-      data: { id: string; status: string; normalizedUrl: string; contentHash: string; recordVersion: number };
+      data: { id: string; status: string; normalizedUrl: string; contentHash: string; confidence: number; recordVersion: number };
       meta: { idempotent: boolean };
     }>(first);
-    expect(firstPayload.data).toMatchObject({ status: "needs-review", recordVersion: 1 });
+    expect(firstPayload.data).toMatchObject({ status: "needs-review", confidence: 25, recordVersion: 1 });
     expect(firstPayload.data.normalizedUrl).not.toContain("utm_source");
     expect(firstPayload.data.contentHash).toMatch(/^[a-f0-9]{64}$/);
     expect(firstPayload.meta.idempotent).toBe(false);
     expect(database.ingestionAttempts).toHaveLength(1);
     expect(database.auditRows).toHaveLength(1);
+    expect(database.readModels.has(`reports:report-${firstPayload.data.id}`)).toBe(true);
+    expect(JSON.parse(database.readModels.get(`reports:report-${firstPayload.data.id}`)!.document)).toMatchObject({
+      confidence: 25,
+      verificationState: "needs-review",
+      processingStatus: "pending",
+      dataClassification: "public-information",
+    });
 
     const repeated = await submitIngestion(request("/api/admin/ingestion", intake()), context);
     expect(repeated.status).toBe(200);
@@ -84,7 +92,7 @@ describe("durable ingestion pipeline", () => {
     expect(database.ingestionSubmissions.size).toBe(1);
   });
 
-  it("requires an explicit versioned review before creating a canonical report", async () => {
+  it("uses versioned review to promote a low-confidence public report", async () => {
     const database = new FakeD1Database();
     const context = { database, adminToken };
     const submitted = await submitIngestion(request("/api/admin/ingestion", intake()), context);
@@ -100,10 +108,11 @@ describe("durable ingestion pipeline", () => {
     );
     expect(approved.status).toBe(200);
     const approvedPayload = await payload<{
-      data: { submission: { status: string; recordVersion: number }; report: { id: string } };
+      data: { submission: { status: string; confidence: number; recordVersion: number }; report: { id: string; confidence: number; verificationState: string; processingStatus: string } };
       meta: { canonicalReportCreated: boolean };
     }>(approved);
-    expect(approvedPayload.data.submission).toMatchObject({ status: "approved", recordVersion: 2 });
+    expect(approvedPayload.data.submission).toMatchObject({ status: "approved", confidence: 60, recordVersion: 2 });
+    expect(approvedPayload.data.report).toMatchObject({ confidence: 60, verificationState: "analyst-confirmed", processingStatus: "processed" });
     expect(approvedPayload.meta.canonicalReportCreated).toBe(true);
     expect(database.readModels.has(`reports:${approvedPayload.data.report.id}`)).toBe(true);
     expect(database.auditRows).toHaveLength(2);
@@ -119,6 +128,29 @@ describe("durable ingestion pipeline", () => {
     expect(stale.status).toBe(409);
     expect((await payload<{ error: { code: string } }>(stale)).error.code).toBe("stale_version");
     expect(database.auditRows).toHaveLength(2);
+  });
+
+  it("allows only the administrator confidence endpoint to raise a pending public report", async () => {
+    const database = new FakeD1Database();
+    const context = { database, adminToken };
+    const submitted = await submitIngestion(request("/api/admin/ingestion", intake()), context);
+    const submission = (await payload<{ data: { id: string; recordVersion: number } }>(submitted)).data;
+
+    const adjusted = await adjustIngestionConfidence(
+      request(`/api/admin/ingestion/${submission.id}/confidence`, {
+        confidence: 45,
+        reason: "Administrator verified the official bulletin identifier while full review remains pending.",
+        expectedVersion: submission.recordVersion,
+      }),
+      { ...context, params: Promise.resolve({ id: submission.id }) },
+    );
+    expect(adjusted.status).toBe(200);
+    const adjustedPayload = await payload<{
+      data: { submission: { confidence: number; status: string; recordVersion: number }; report: { confidence: number; verificationState: string } };
+    }>(adjusted);
+    expect(adjustedPayload.data.submission).toMatchObject({ confidence: 45, status: "needs-review", recordVersion: 2 });
+    expect(adjustedPayload.data.report).toMatchObject({ confidence: 45, verificationState: "needs-review" });
+    expect(database.auditRows.at(-1)?.[5]).toBe("ingestion-confidence-updated");
   });
 
   it("quarantines canonical duplicates and rejects unsafe evidence URLs", async () => {

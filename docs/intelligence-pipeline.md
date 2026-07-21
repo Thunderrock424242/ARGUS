@@ -59,6 +59,8 @@ Factors include official or structured evidence, independent source groups, reli
 
 **Automated confidence is rule coverage, not the mathematical probability that a claim or event is true.** Analyst verification remains separate and never forces the score to 100.
 
+Public-information reports use an additional review ceiling. New manual and collector records are visible at 25% (`low`) with `needs-review`. Approval raises the default ceiling to 60% (`moderate`). Administrators may set a different 0-99 ceiling before or after approval, but the change requires `confidence:manage`, a reason, the current D1 version, and an audit entry. Event assessment cannot exceed the highest applicable public-report ceiling in its evidence set.
+
 ## Evaluation before live use
 
 Build a labeled historical test corpus with lawful redistribution, measure false merges/splits and calibration by category, test adversarial syndicated reporting, version every rule change, and require analyst sign-off for threshold promotion. Retain prior assessments so a dossier can explain why a score changed.

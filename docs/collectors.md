@@ -4,11 +4,21 @@
 
 An `IntelligenceCollector` has an ID, display name, source type, and one `collect(context)` method. The context carries the configured source, request ID, collection time, optional cursor/since values, abort signal, and no ambient credentials. A collector returns normalized `CollectedReport` candidates; it does not write directly to the database. The trusted runtime must pass each candidate through the same `createIngestionSubmission` boundary used by manual/API intake.
 
-Included adapters cover RSS/Atom, USGS Earthquake GeoJSON, NASA EONET, GDACS, ReliefWeb, National Weather Service alerts, CISA Known Exploited Vulnerabilities, and GDELT discovery data. They default to `dry-run` and emit labeled synthetic output without network access.
+Included adapters cover RSS/Atom, USGS Earthquake GeoJSON, The Guardian Open Platform, X recent search, NASA EONET, GDACS, ReliefWeb, National Weather Service alerts, CISA Known Exploited Vulnerabilities, and GDELT discovery data. They default to `dry-run` and emit labeled synthetic output without network access.
 
 ## Production execution
 
-Use platform cron or a persistent queue to create collector jobs. `executeCollectorJob` runs exactly one job and returns a collector run plus a retry job or dead-letter outcome. Exponential backoff is bounded and jitter-ready. Store jobs, cursors, last-success timestamps, and dead letters durably; never rely on `setInterval` inside a web process. ARGUS now has durable ingestion submissions and attempt history, but the production collector queue, consumer, and dead-letter binding are not deployed yet.
+The Worker pilot uses a 15-minute UTC Cron Trigger. `executeCollectorJob` runs exactly one job and returns a collector run plus a retry or dead-letter outcome. Runs, attempts, the next retry time, source health, and last-success timestamps are durable in D1; no `setInterval` or module-global request state is used. A higher-volume rollout should move fan-out to Cloudflare Queues or Workflows, but the three-source pilot remains a bounded single-step cron task.
+
+The active pilot registry is intentionally small:
+
+| Source | Role | Credential | Publication rule |
+| --- | --- | --- | --- |
+| [USGS Earthquake GeoJSON](https://earthquake.usgs.gov/earthquakes/feed/v1.0/geojson.php) | Official structured signal | None | Protected intake only |
+| [The Guardian Open Platform](https://open-platform.theguardian.com/documentation/) | News report | `GUARDIAN_API_KEY` | Metadata/excerpt only; protected intake only |
+| [X recent search](https://docs.x.com/x-api/posts/search/quickstart/recent-search) | Unverified social signal | `X_BEARER_TOKEN` | Never independent confirmation; protected intake only |
+
+The Guardian adapter does not store full article bodies. The X adapter preserves a Post link and author handle, but analyst review and independent corroboration remain mandatory. The [X API uses pay-per-use pricing](https://docs.x.com/x-api/getting-started/pricing), so it is opt-in and not part of the free default. Source access, quotas, and terms must be checked before activation.
 
 Suggested schedules are starting points, not promises:
 
@@ -36,7 +46,19 @@ Collector URLs are hostile even when submitted by an administrator. `lib/securit
 7. Restrict response content types and parse defensively.
 8. Route egress through a controlled network policy where possible.
 
-This layered process is required to resist DNS rebinding and cloud-metadata access. Syntax-only validation is not sufficient for a live request.
+Cloudflare Workers does not expose the connected origin IP to JavaScript, so its native `fetch` cannot implement application-level DNS pinning. The deployed pilot therefore permits only three compile-time official host/path pairs, removes caller-supplied authorization, injects secrets server-side, rejects every redirect, validates content type, streams into a hard byte cap, and applies a timeout. Arbitrary/custom RSS collection remains dry-run until a transport with address verification or controlled egress is added. Syntax-only validation is not sufficient for a user-configurable live request.
+
+## Enabling the Worker pilot
+
+1. Apply D1 migrations `0007_young_sheva_callister.sql` and `0008_whole_gateway.sql`.
+2. Obtain a Guardian Open Platform developer key if Guardian collection is required.
+3. Obtain approved X developer access and a Bearer Token if X collection is required. The X API is currently pay-per-use, so `COLLECTOR_X_ENABLED` defaults to `false`; leaving it disabled does not affect USGS or Guardian.
+4. Run `npx wrangler secret put GUARDIAN_API_KEY` and/or `npx wrangler secret put X_BEARER_TOKEN` from the repository root.
+5. Review the two query strings in `wrangler.jsonc` and keep the X query specific.
+6. Set `COLLECTOR_PILOT_ENABLED` to `true`. Individual source flags remain independent.
+7. Run `npm run brain:check`, then `npm run brain:deploy`.
+8. Sign in as Source Manager or Administrator, open **Ingestion**, inspect the Collector Pilot panel, and run one source manually.
+9. Review the submitted reports. They enter the public read model at 25% confidence with `needs-review`; approval raises the default ceiling to 60%, rejection removes the public record, and only administrators can make a separately audited override.
 
 ## Adding an RSS or Atom source
 

@@ -70,7 +70,7 @@ Relationship and market queries use strict schemas and reject unknown fields. Re
 
 ## Durable schema
 
-The D1 schema includes graph nodes, relationships, relationship history, impact rules, market assets, market assessments, state history, conflict profiles, camera sources, alert history, monitoring layouts, and versioned API read models. Score and coordinate constraints provide final database-level validation. The Worker uses D1 when bound and falls back per empty collection to immutable demonstration fixtures.
+The D1 schema includes graph nodes, relationships, relationship history, impact rules, market assets, market assessments, state history, conflict profiles, camera sources, alert history, monitoring layouts, and versioned API read models. Score and coordinate constraints provide final database-level validation. The Worker uses D1 when bound and falls back per empty collection to immutable demonstration fixtures only when the deployment demo flag is enabled.
 
 ## Current limitations
 

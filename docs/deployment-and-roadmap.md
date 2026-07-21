@@ -12,10 +12,10 @@ ARGUS separates the interface from the runtime:
 Before deployment:
 
 1. Run lint, typecheck, unit tests, the Pages build, and `npm run brain:check`.
-2. Provision D1, apply every reviewed migration through `0006_brown_exiles.sql`, add its `DB` binding, and store the bootstrap and GitHub OAuth values with Wrangler secrets.
+2. Provision D1, apply every reviewed migration through `0008_whole_gateway.sql`, add its `DB` binding, and store the bootstrap and GitHub OAuth values with Wrangler secrets.
 3. Deploy the Worker with `npm run brain:deploy`, seed demonstration read models through the protected endpoint, and record its `workers.dev` URL.
 4. Confirm the canonical Worker URL in `.github/workflows/deploy-pages.yml` and run the Pages workflow.
-5. Keep collectors in dry-run for the public demonstration.
+5. Keep `COLLECTOR_PILOT_ENABLED=false` until source credentials, queries, terms, and the protected queue have been reviewed.
 6. Verify Worker CORS, the `X-ARGUS-Data-Store` header, globe/map tiles and attribution, `/api/health`, Aether fallback behavior, and demonstration labels.
 7. Confirm no `.env`, credential, raw private evidence, or production database export is in either artifact.
 
@@ -29,9 +29,9 @@ For production monitoring, deploy the collector scheduler/queue separately from 
 - GitHub OAuth, PKCE, stable analyst IDs, D1 sessions, role checks, audited role assignment, and browser review writes are implemented and configured on the public deployment. New deployments still require the documented one-time OAuth and administrator bootstrap.
 - The admin bearer token remains bootstrap/recovery access and must be rotated and kept out of ordinary browser use.
 - Protected-route and sign-in rate limits use D1 counters; higher-volume deployments should evaluate a Durable Object or gateway limiter.
-- Administrative collector runs are deliberately dry-run and do not persist reports.
+- The three-source official collector pilot is implemented but globally disabled by default. Live runs persist only protected ingestion submissions and durable run health; they never publish automatically.
 - Manual/API evidence intake is durable and review-gated. It does not fetch the submitted URL, and it remains explicitly demonstration-classified until the real-data release gate is satisfied.
-- Retention cron is configured, but live collector transport, DNS pinning, queues, and source credentials are not deployed.
+- Retention and collector crons are configured. Fixed official endpoints use hardened Worker fetch; custom-source DNS pinning, high-volume queues, and optional Guardian/X credentials remain deployment responsibilities.
 - RSS parsing is demonstration-grade and should be replaced by a hardened streaming parser.
 - Claim extraction, contradiction detection, and classification are deterministic heuristics.
 - Search covers provider events, reports, sources, briefs, watchlists, locations, and analyst notes; a separate entity index and full-text engine are not yet present.
@@ -54,7 +54,7 @@ GitHub OAuth with PKCE, stable analyst IDs, hashed D1 sessions, role checks, bro
 
 ### 3. Hardened ingestion runtime â€” review-gated intake implemented
 
-The D1 intake queue, strict validation, HTTPS/public-target policy, normalized provenance, SHA-256 hashing, idempotent inserts, canonical duplicate quarantine, versioned reviewer decisions, attempt history, audit records, and authenticated browser console are implemented. Next, connect one allowlisted official collector through DNS-pinned egress, strict streaming parsing, durable cron/queue scheduling, bounded retries/dead letters, cursors, and health telemetry. Start disabled and compare its output with dry-run fixtures before enabling publication.
+The D1 intake queue, strict validation, normalized provenance, SHA-256 hashing, idempotent inserts, canonical duplicate quarantine, versioned reviewer decisions, attempt history, audit records, authenticated browser console, three fixed official source adapters, bounded streaming transport, durable cron runs, retries/dead letters, and source health telemetry are implemented. The pilot starts disabled and never enables publication. Next, add cursor persistence, controlled egress for user-configurable sources, and a Cloudflare Queue or Workflow only when measured volume justifies it.
 
 ### 4. Durable intelligence processing
 

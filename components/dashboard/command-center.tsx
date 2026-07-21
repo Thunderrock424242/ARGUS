@@ -158,7 +158,7 @@ function ReportStream({ reports }: { reports: SourceReport[] }) {
             </div>
             <span className="processing-state">
               {report.processingStatus === "processed" ? <CheckCircle2 size={11} /> : <Clock3 size={11} />}
-              {report.processingStatus}
+              {report.confidence === undefined ? report.processingStatus : `${report.confidence}% · ${report.processingStatus}`}
             </span>
           </article>
         ))}

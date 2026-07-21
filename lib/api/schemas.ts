@@ -212,6 +212,13 @@ export const ingestionReviewSchema = z.object({
   reason: z.string().trim().min(3).max(2_000),
   expectedVersion: z.number().int().min(1),
   eventId: routeIdentifierSchema.optional(),
+  confidenceOverride: z.number().int().min(0).max(99).optional(),
+}).strict();
+
+export const ingestionConfidenceSchema = z.object({
+  confidence: z.number().int().min(0).max(99),
+  reason: z.string().trim().min(3).max(2_000),
+  expectedVersion: z.number().int().min(1),
 }).strict();
 
 export const ingestionRetrySchema = z.object({

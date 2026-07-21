@@ -91,6 +91,45 @@ describe("standalone ARGUS brain Worker", () => {
     expect(database.auditRows).toHaveLength(1);
   });
 
+  it("disables fixture fallback and demonstration seeding with the deployment flag", async () => {
+    const database = new FakeD1Database();
+    const token = "worker-demo-disabled-admin-token";
+    const disabledEnv = {
+      ...env,
+      ARGUS_ADMIN_TOKEN: token,
+      ARGUS_DEMO_ENABLED: "false",
+      DB: database,
+    };
+    const snapshot = await worker.fetch(
+      new Request("https://argus-brain.example/api/operations/snapshot", {
+        headers: { origin: "https://thunderrock424242.github.io" },
+      }),
+      disabledEnv,
+    );
+    const snapshotPayload = await snapshot.json() as { data: { events: unknown[]; reports: unknown[] }; meta: { demoDataEnabled: boolean } };
+    expect(snapshot.status).toBe(200);
+    expect(snapshot.headers.get("x-argus-demo-enabled")).toBe("false");
+    expect(snapshotPayload.data.events).toEqual([]);
+    expect(snapshotPayload.data.reports).toEqual([]);
+    expect(snapshotPayload.meta.demoDataEnabled).toBe(false);
+
+    const seed = await worker.fetch(
+      new Request("https://argus-brain.example/api/admin/demo-seed", {
+        method: "POST",
+        headers: {
+          origin: "https://thunderrock424242.github.io",
+          authorization: `Bearer ${token}`,
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({ reviewerName: "Deployment Operator", confirmation: "seed-demonstration-data" }),
+      }),
+      disabledEnv,
+    );
+    expect(seed.status).toBe(409);
+    expect((await seed.json() as { error: { code: string } }).error.code).toBe("demo_disabled");
+    expect(database.readModels.size).toBe(0);
+  });
+
   it("allows authorization headers only through approved-origin preflight", async () => {
     const response = await worker.fetch(
       new Request("https://argus-brain.example/api/admin/review", {
@@ -138,5 +177,24 @@ describe("standalone ARGUS brain Worker", () => {
     expect(response.headers.get("x-argus-data-store")).toBe("d1");
     expect(payload.data).toMatchObject({ status: "needs-review", recordVersion: 1 });
     expect(database.auditRows.at(-1)?.[5]).toBe("ingestion-submitted");
+  });
+
+  it("exposes redacted collector readiness through the protected Worker route", async () => {
+    const database = new FakeD1Database();
+    const token = "worker-collector-admin-token";
+    const response = await worker.fetch(
+      new Request("https://argus-brain.example/api/admin/collectors", {
+        headers: {
+          origin: "https://thunderrock424242.github.io",
+          authorization: `Bearer ${token}`,
+        },
+      }),
+      { ...env, ARGUS_ADMIN_TOKEN: token, DB: database },
+    );
+    const payload = await response.json() as { data: { enabled: boolean; sources: Array<{ credentialConfigured: boolean }> } };
+    expect(response.status).toBe(200);
+    expect(payload.data.enabled).toBe(false);
+    expect(payload.data.sources).toHaveLength(3);
+    expect(JSON.stringify(payload)).not.toContain(token);
   });
 });

@@ -2,6 +2,7 @@ import { createContext, type ReactNode, useCallback, useContext, useEffect, useM
 import { useAuth } from "@/components/auth/auth-provider";
 import { DEFAULT_DATASET } from "@/packages/database/provider";
 import { demoAuditEntries, demoTimelineEntries } from "@/packages/shared/demo-data";
+import { browserDemoDataEnabled } from "@/lib/config/demo-mode";
 import type {
   AuditLogEntry,
   EventTimelineEntry,
@@ -34,21 +35,22 @@ interface RuntimeData {
 
 interface RuntimeDataContextValue extends RuntimeData {
   source: RuntimeDataSource;
+  demoEnabled: boolean;
   refresh(): void;
 }
 
 const initialData: RuntimeData = {
-  events: structuredClone([...DEFAULT_DATASET.events]),
-  reports: structuredClone([...DEFAULT_DATASET.reports]),
-  sources: structuredClone([...DEFAULT_DATASET.sources]),
-  relationships: structuredClone([...DEFAULT_DATASET.relationships]),
-  graphNodes: structuredClone([...DEFAULT_DATASET.graphNodes]),
-  relationshipHistory: structuredClone([...DEFAULT_DATASET.relationshipHistory]),
-  marketAssets: structuredClone([...DEFAULT_DATASET.marketAssets]),
-  marketImpacts: structuredClone([...DEFAULT_DATASET.marketImpacts]),
-  alerts: structuredClone([...DEFAULT_DATASET.alerts]),
-  timelineEntries: structuredClone(demoTimelineEntries),
-  auditEntries: structuredClone(demoAuditEntries),
+  events: browserDemoDataEnabled ? structuredClone([...DEFAULT_DATASET.events]) : [],
+  reports: browserDemoDataEnabled ? structuredClone([...DEFAULT_DATASET.reports]) : [],
+  sources: browserDemoDataEnabled ? structuredClone([...DEFAULT_DATASET.sources]) : [],
+  relationships: browserDemoDataEnabled ? structuredClone([...DEFAULT_DATASET.relationships]) : [],
+  graphNodes: browserDemoDataEnabled ? structuredClone([...DEFAULT_DATASET.graphNodes]) : [],
+  relationshipHistory: browserDemoDataEnabled ? structuredClone([...DEFAULT_DATASET.relationshipHistory]) : [],
+  marketAssets: browserDemoDataEnabled ? structuredClone([...DEFAULT_DATASET.marketAssets]) : [],
+  marketImpacts: browserDemoDataEnabled ? structuredClone([...DEFAULT_DATASET.marketImpacts]) : [],
+  alerts: browserDemoDataEnabled ? structuredClone([...DEFAULT_DATASET.alerts]) : [],
+  timelineEntries: browserDemoDataEnabled ? structuredClone(demoTimelineEntries) : [],
+  auditEntries: browserDemoDataEnabled ? structuredClone(demoAuditEntries) : [],
 };
 
 const RuntimeDataContext = createContext<RuntimeDataContextValue | null>(null);
@@ -57,6 +59,7 @@ export function RuntimeDataProvider({ children }: { children: ReactNode }) {
   const auth = useAuth();
   const [data, setData] = useState<RuntimeData>(initialData);
   const [source, setSource] = useState<RuntimeDataSource>("syncing");
+  const [demoEnabled, setDemoEnabled] = useState(browserDemoDataEnabled);
   const [refreshKey, setRefreshKey] = useState(0);
   const refresh = useCallback(() => {
     setSource("syncing");
@@ -70,14 +73,16 @@ export function RuntimeDataProvider({ children }: { children: ReactNode }) {
       try {
         const response = await auth.publicFetch("/api/operations/snapshot", { signal: controller.signal });
         if (!response.ok) throw new Error("The runtime snapshot was not accepted.");
-        const payload = await response.json() as { data: Partial<RuntimeData> & { stateHistory?: EventTimelineEntry[] } };
+        const payload = await response.json() as { data: Partial<RuntimeData> & { stateHistory?: EventTimelineEntry[] }; meta?: { demoDataEnabled?: boolean } };
         if (!active) return;
+        const effectiveDemoEnabled = browserDemoDataEnabled && payload.meta?.demoDataEnabled !== false;
         setData((current) => ({
           ...current,
           ...payload.data,
           timelineEntries: payload.data.stateHistory ?? current.timelineEntries,
-          auditEntries: current.auditEntries,
+          auditEntries: effectiveDemoEnabled ? current.auditEntries : [],
         }));
+        setDemoEnabled(effectiveDemoEnabled);
         setSource(response.headers.get("x-argus-data-store") === "d1" ? "d1" : "worker-fixtures");
       } catch {
         if (!active || controller.signal.aborted) return;
@@ -101,7 +106,7 @@ export function RuntimeDataProvider({ children }: { children: ReactNode }) {
     };
   }, [auth, refreshKey]);
 
-  const value = useMemo<RuntimeDataContextValue>(() => ({ ...data, source, refresh }), [data, refresh, source]);
+  const value = useMemo<RuntimeDataContextValue>(() => ({ ...data, source, demoEnabled, refresh }), [data, demoEnabled, refresh, source]);
   return <RuntimeDataContext.Provider value={value}>{children}</RuntimeDataContext.Provider>;
 }
 

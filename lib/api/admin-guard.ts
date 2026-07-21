@@ -8,6 +8,7 @@ import {
   requestRateLimitKey,
 } from "@/lib/security/rate-limit";
 import type { D1DocumentDatabase } from "@/packages/database/d1-read-model-provider";
+import type { CollectorPilotConfiguration, CollectorTransport } from "@/packages/intelligence";
 import {
   ARGUS_PERMISSIONS,
   type ArgusPermission,
@@ -19,6 +20,9 @@ import { jsonError } from "./responses";
 export interface AuthorizationContext {
   adminToken?: string;
   database?: D1DocumentDatabase;
+  collectorConfig?: CollectorPilotConfiguration;
+  collectorTransport?: CollectorTransport;
+  demoDataEnabled?: boolean;
 }
 
 export type AdminGuardResult =

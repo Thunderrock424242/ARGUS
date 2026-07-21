@@ -2,12 +2,13 @@
 	"$schema": "node_modules/wrangler/config-schema.json",
 	"name": "argus-brain",
 	"main": "worker/index.ts",
-	"compatibility_date": "2026-07-19",
+	"compatibility_date": "2026-07-20",
 	"compatibility_flags": [
 		"nodejs_compat"
 	],
 	"triggers": {
 		"crons": [
+			"*/15 * * * *",
 			"15 3 * * *"
 		]
 	},
@@ -15,6 +16,13 @@
 		"ALLOWED_ORIGINS": "https://thunderrock424242.github.io,http://localhost:5173,http://127.0.0.1:5173",
 		"AUTH_CALLBACK_URL": "https://thunderrock424242.github.io/ARGUS/",
 		"AUTH_SESSION_TTL_SECONDS": "28800",
+		"ARGUS_DEMO_ENABLED": "true",
+		"COLLECTOR_PILOT_ENABLED": "false",
+		"COLLECTOR_USGS_ENABLED": "true",
+		"COLLECTOR_GUARDIAN_ENABLED": "true",
+		"COLLECTOR_X_ENABLED": "false",
+		"COLLECTOR_GUARDIAN_QUERY": "world",
+		"COLLECTOR_X_QUERY": "(earthquake OR wildfire OR cyclone OR flood) lang:en -is:retweet",
 		"RETENTION_DAYS": "180"
 	},
 	"secrets": {
@@ -38,6 +46,8 @@
 	]
 	// After `wrangler d1 create argus-intelligence`, add the returned binding as
 	// `d1_databases: [{ "binding": "DB", "database_name": "argus-intelligence", "database_id": "..." }]`.
-	// Keep ARGUS_ADMIN_TOKEN, GITHUB_OAUTH_CLIENT_ID, and
-	// GITHUB_OAUTH_CLIENT_SECRET in `wrangler secret`, never in this file.
+	// Keep ARGUS_ADMIN_TOKEN, GITHUB_OAUTH_CLIENT_ID, GITHUB_OAUTH_CLIENT_SECRET,
+	// GUARDIAN_API_KEY, and X_BEARER_TOKEN in `wrangler secret`, never in this file.
+	// Guardian and X secrets are optional while their source flags or the global
+	// collector pilot flag are disabled.
 }

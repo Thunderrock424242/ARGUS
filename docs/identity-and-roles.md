@@ -24,8 +24,8 @@ Every OAuth identity receives `viewer`. Additional roles add explicit permission
 | `viewer` | Read its own identity profile |
 | `analyst` | Act on alerts, save personal monitoring layouts, and submit evidence to ingestion |
 | `reviewer` | Analyst permissions plus event, relationship, and ingestion review |
-| `source-manager` | Analyst permissions plus controlled dry-run collector execution and failed-ingestion retry |
-| `administrator` | Every permission, including role management, retention, and demonstration seeding |
+| `source-manager` | Analyst permissions plus controlled official-source collection, collector status, and failed-ingestion retry |
+| `administrator` | All permissions, including audited public-information confidence overrides, identity management, retention, and demo seeding |
 
 Roles are enforced in the Worker. Hiding or displaying a browser control is never treated as authorization. The last administrator role cannot be removed.
 
@@ -62,7 +62,7 @@ npm run brain:check
 npm run brain:deploy
 ```
 
-On a database that was only baselined through `0003`, the list should show `0004_groovy_revanche.sql`, `0005_abnormal_giant_man.sql`, and `0006_brown_exiles.sql` as pending. On the current public database, only `0006_brown_exiles.sql` should remain after the identity migrations. If an older unexpected migration appears, stop instead of confirming and inspect `d1_migrations` first. Migration `0004` creates identity tables, `0005` keeps mutable GitHub logins non-authoritative, and `0006` creates the protected ingestion and attempt tables. Apply every pending migration before deploying Worker code that uses it.
+On a database that was only baselined through `0003`, the list should include `0004_groovy_revanche.sql` through `0008_whole_gateway.sql` as pending. If an older unexpected migration appears, stop instead of confirming and inspect `d1_migrations` first. Migration `0004` creates identity tables, `0005` keeps mutable GitHub logins non-authoritative, `0006` creates the protected ingestion and attempt tables, `0007` adds durable collector schedule, attempt, retry, and network-state fields, and `0008` adds versioned ingestion confidence controls. Apply every pending migration before deploying Worker code that uses it.
 
 ### 4. Sign in and grant the first administrator
 

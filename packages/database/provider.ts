@@ -76,6 +76,25 @@ export const DEFAULT_DATASET: MockProviderDataset = {
   monitoringLayouts: demoMonitoringLayouts,
 };
 
+export const EMPTY_DATASET: MockProviderDataset = {
+  events: [],
+  reports: [],
+  briefs: [],
+  watchlists: [],
+  sources: [],
+  graphNodes: [],
+  relationships: [],
+  relationshipHistory: [],
+  marketAssets: [],
+  marketImpacts: [],
+  conflictProfiles: [],
+  regionalProfiles: [],
+  stateHistory: [],
+  alerts: [],
+  cameraSources: [],
+  monitoringLayouts: [],
+};
+
 function copy<T>(value: T): T {
   return structuredClone(value);
 }
@@ -187,6 +206,6 @@ export function configureIntelligenceDataProvider(provider: IntelligenceDataProv
   configuredProvider = provider;
 }
 
-export function resetIntelligenceDataProvider(): void {
-  configuredProvider = createMockIntelligenceDataProvider();
+export function resetIntelligenceDataProvider(demoEnabled = true): void {
+  configuredProvider = createMockIntelligenceDataProvider(demoEnabled ? DEFAULT_DATASET : EMPTY_DATASET);
 }

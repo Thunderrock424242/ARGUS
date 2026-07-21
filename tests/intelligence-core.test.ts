@@ -19,7 +19,9 @@ import {
   DeterministicAetherProvider,
 } from "@/packages/intelligence/aether";
 import {
+  GuardianOpenPlatformCollector,
   RssAtomCollector,
+  XRecentSearchCollector,
   assertPublicHttpsUrl,
 } from "@/packages/intelligence/collectors";
 import {
@@ -89,6 +91,25 @@ describe("transparent confidence assessment", () => {
 
     expect(disputed.score).toBeLessThan(baseline.score);
     expect(disputed.negativeFactors.some((factor) => factor.code === "major-contradiction")).toBe(true);
+  });
+
+  it("caps unreviewed public information at its audited report confidence", () => {
+    const reports = demoReports.slice(0, 3).map((report) => ({
+      ...report,
+      dataClassification: "public-information" as const,
+      confidence: 25,
+      verificationState: "needs-review" as const,
+    }));
+    const assessment = assessConfidence({
+      reports,
+      sources: demoSources,
+      officialSourceIds: reports.map((report) => report.sourceId),
+      structuredEvidenceReportIds: reports.map((report) => report.id),
+    });
+
+    expect(assessment.score).toBe(25);
+    expect(assessment.label).toBe("low");
+    expect(assessment.negativeFactors.some((factor) => factor.code === "public-review-ceiling")).toBe(true);
   });
 });
 
@@ -225,6 +246,72 @@ describe("safe collector adapters", () => {
 
     expect(reports).toHaveLength(1);
     expect(reports[0]).toMatchObject({ externalId: "fixture-1", title: "Structured test bulletin" });
+  });
+
+  it("normalizes Guardian metadata without collecting article bodies", async () => {
+    const collector = new GuardianOpenPlatformCollector({
+      mode: "live",
+      endpoint: "https://content.guardianapis.com/search?q=world",
+      transport: {
+        async request(request) {
+          return {
+            status: 200,
+            finalUrl: request.url,
+            headers: { "content-type": "application/json" },
+            resolvedAddress: "93.184.216.34",
+            body: JSON.stringify({ response: { results: [{
+              id: "world/2099/jun/01/example",
+              webTitle: "Structured Guardian fixture",
+              webUrl: "https://www.theguardian.com/world/2099/jun/01/example",
+              webPublicationDate: "2099-06-01T12:00:00Z",
+              sectionName: "World news",
+              fields: { trailText: "<p>Bounded metadata excerpt.</p>", byline: "Fixture Reporter" },
+            }] } }),
+          };
+        },
+      },
+    });
+    const reports = await collector.collect({
+      source: demoSources[0],
+      requestedAt: "2099-06-01T12:00:00.000Z",
+      requestId: "guardian-parse-test",
+    });
+    expect(reports[0]).toMatchObject({
+      externalId: "world/2099/jun/01/example",
+      description: "Bounded metadata excerpt.",
+      author: "Fixture Reporter",
+    });
+    expect(reports[0].bodyText).toBeUndefined();
+  });
+
+  it("labels X results as attributable public Post links", async () => {
+    const collector = new XRecentSearchCollector({
+      mode: "live",
+      transport: {
+        async request(request) {
+          return {
+            status: 200,
+            finalUrl: request.url,
+            headers: { "content-type": "application/json" },
+            resolvedAddress: "93.184.216.34",
+            body: JSON.stringify({
+              data: [{ id: "1234567890", text: "Public fixture signal", author_id: "42", created_at: "2099-06-01T12:00:00Z", lang: "en" }],
+              includes: { users: [{ id: "42", username: "fixture_source" }] },
+            }),
+          };
+        },
+      },
+    });
+    const reports = await collector.collect({
+      source: demoSources[0],
+      requestedAt: "2099-06-01T12:00:00.000Z",
+      requestId: "x-parse-test",
+    });
+    expect(reports[0]).toMatchObject({
+      externalId: "1234567890",
+      author: "@fixture_source",
+      url: "https://x.com/fixture_source/status/1234567890",
+    });
   });
 
   it("rejects local and private collector destinations", () => {

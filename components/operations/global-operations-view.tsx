@@ -14,6 +14,7 @@ import type {
   SourceReport,
 } from "@/packages/shared/types";
 import { LiveReportStream } from "./live-report-stream";
+import { browserDemoDataEnabled } from "@/lib/config/demo-mode";
 
 const operationalLayers = [
   { id: "security", label: "Security", categories: "Conflict · unrest · sanctions", tone: "bg-red-400" },
@@ -69,7 +70,7 @@ export function GlobalOperationsView({
     metrics,
   }));
   const [runtimeDataSource, setRuntimeDataSource] = useState<RuntimeDataSource>(
-    brainApiUrl ? "syncing" : "fixtures",
+    brainApiUrl ? "syncing" : browserDemoDataEnabled ? "fixtures" : "degraded",
   );
   const [now, setNow] = useState(() => new Date());
   const [enabledLayers, setEnabledLayers] = useState(() => new Set(operationalLayers.map((layer) => layer.id)));
@@ -135,7 +136,7 @@ export function GlobalOperationsView({
           <div className="flex items-center gap-2"><Layers3 size={15} className="text-cyan-300" /><h2 className="text-xs font-semibold uppercase tracking-[.13em] text-slate-300">Operational layers</h2></div>
           <div className="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-1">{operationalLayers.map((layer) => <button key={layer.id} type="button" className={`rounded-lg border p-3 text-left transition ${enabledLayers.has(layer.id) ? "border-white/10 bg-white/[.035]" : "border-white/[.05] opacity-55"}`} aria-pressed={enabledLayers.has(layer.id)} onClick={() => toggleLayer(layer.id)}><div className="flex items-center gap-2"><span className={`h-2 w-2 rounded-full ${layer.tone}`} /><span className="text-xs font-semibold text-slate-300">{layer.label}</span><span className="ml-auto font-mono text-[9px] text-slate-600">{enabledLayers.has(layer.id) ? "ON" : "OFF"}</span></div><p className="mt-2 text-[9px] leading-4 text-slate-600">{layer.categories}</p></button>)}</div>
           <label className="mt-5 block border-t border-white/[.06] pt-4"><span className="flex justify-between text-[9px] uppercase tracking-[.13em] text-slate-500"><span>Overlay opacity</span><span>{layerOpacity}%</span></span><input type="range" min="20" max="100" value={layerOpacity} onChange={(event) => setLayerOpacity(Number(event.target.value))} className="mt-3 w-full accent-cyan-300" /></label>
-          <div className="mt-5 rounded-lg border border-white/[.07] bg-black/20 p-3 text-[9px] leading-4 text-slate-600"><p className="font-semibold uppercase tracking-[.12em] text-slate-400">Layer provenance</p><p className="mt-2">{runtimeDataSource === "d1" ? "D1 Worker read models" : runtimeDataSource === "syncing" ? "Synchronizing with ARGUS Worker" : runtimeDataSource === "degraded" ? "Worker unavailable · bundled fallback active" : "Fictional fixture providers"} · refreshed {new Date(runtimeData.metrics.generatedAt).toLocaleTimeString()} · use Sources for collector limitations and attribution.</p></div>
+          <div className="mt-5 rounded-lg border border-white/[.07] bg-black/20 p-3 text-[9px] leading-4 text-slate-600"><p className="font-semibold uppercase tracking-[.12em] text-slate-400">Layer provenance</p><p className="mt-2">{runtimeDataSource === "d1" ? "D1 Worker read models" : runtimeDataSource === "syncing" ? "Synchronizing with ARGUS Worker" : runtimeDataSource === "degraded" ? (browserDemoDataEnabled ? "Worker unavailable · bundled fallback active" : "Worker unavailable · demo fallback disabled") : "Fictional fixture providers"} · refreshed {new Date(runtimeData.metrics.generatedAt).toLocaleTimeString()} · use Sources for collector limitations and attribution.</p></div>
         </aside>
 
         <div className="min-w-0 bg-[#060c11] p-3 sm:p-4">
@@ -154,7 +155,7 @@ export function GlobalOperationsView({
       </section>
 
       <section className="border-t border-white/[.08] p-3 sm:p-4"><LiveReportStream reports={runtimeData.reports} sources={runtimeData.sources} events={runtimeData.events} compact /></section>
-      <footer className="flex flex-wrap items-center justify-between gap-2 border-t border-white/[.08] bg-[#080f15] px-4 py-3 text-[9px] uppercase tracking-[.12em] text-slate-600"><span>Latest ingestion {new Date(runtimeData.metrics.lastSuccessfulIngestionAt).toLocaleString()}</span><span>Demonstration snapshot · not real-time intelligence · automated relationships do not establish causation</span></footer>
+      <footer className="flex flex-wrap items-center justify-between gap-2 border-t border-white/[.08] bg-[#080f15] px-4 py-3 text-[9px] uppercase tracking-[.12em] text-slate-600"><span>Latest ingestion {new Date(runtimeData.metrics.lastSuccessfulIngestionAt).toLocaleString()}</span><span>{browserDemoDataEnabled ? "Demonstration snapshot · not real-time intelligence" : "Public information · low confidence until reviewed"} · automated relationships do not establish causation</span></footer>
     </main>
   );
 }

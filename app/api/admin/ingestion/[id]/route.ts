@@ -4,6 +4,7 @@ import { ingestionReviewSchema, routeIdentifierSchema } from "@/lib/api/schemas"
 import { validateJsonBody } from "@/lib/api/validation";
 import { IngestionStoreError, reviewIngestionSubmission } from "@/packages/database/ingestion-store";
 import { intelligenceDataProvider } from "@/packages/database/provider";
+import { principalHasPermission } from "@/packages/shared/auth";
 
 interface IngestionReviewContext extends AuthorizationContext {
   params?: Promise<{ id: string }>;
@@ -30,6 +31,15 @@ export async function POST(request: Request, context: IngestionReviewContext = {
   if (!body.success) {
     return jsonError(body.status, body.code, body.message, {
       details: body.details,
+      requestId,
+      headers: guard.rateLimitHeaders,
+    });
+  }
+  if (
+    body.data.confidenceOverride !== undefined &&
+    !principalHasPermission(guard.principal, "confidence:manage")
+  ) {
+    return jsonError(403, "forbidden", "The confidence:manage permission is required to override confidence during approval.", {
       requestId,
       headers: guard.rateLimitHeaders,
     });

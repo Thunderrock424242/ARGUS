@@ -9,12 +9,19 @@ import type { D1DocumentDatabase } from "@/packages/database/d1-read-model-provi
 interface SeedRouteContext {
   adminToken?: string;
   database?: D1DocumentDatabase;
+  demoDataEnabled?: boolean;
 }
 
 export async function POST(request: Request, context: SeedRouteContext = {}): Promise<Response> {
   const requestId = requestIdFrom(request);
   const guard = await requirePermission(request, "demo:seed", "demo-seed", requestId, context);
   if (!guard.authorized) return guard.response;
+  if (context.demoDataEnabled === false) {
+    return jsonError(409, "demo_disabled", "Demonstration data is disabled for this Worker deployment.", {
+      requestId,
+      headers: guard.rateLimitHeaders,
+    });
+  }
   if (!context.database) {
     return jsonError(503, "durable_store_unavailable", "D1 is required before demonstration data can be seeded.", { requestId, headers: guard.rateLimitHeaders });
   }

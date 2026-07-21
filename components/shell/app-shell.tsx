@@ -37,6 +37,7 @@ import { FormEvent, ReactNode, useEffect, useMemo, useState } from "react";
 import { demoEvents, demoSources } from "@/packages/shared/demo-data";
 import { BrandMark } from "./brand-mark";
 import { useAuth } from "@/components/auth/auth-provider";
+import { browserDemoDataEnabled } from "@/lib/config/demo-mode";
 
 const navigation = [
   { href: "/", label: "Global Operations", icon: Activity },
@@ -123,6 +124,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   }, []);
 
   const results = useMemo<SearchResult[]>(() => {
+    if (!browserDemoDataEnabled) return [];
     const normalized = query.trim().toLowerCase();
     if (!normalized) return [];
     const eventResults = demoEvents
@@ -211,7 +213,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               >
                 <Icon size={18} strokeWidth={1.7} aria-hidden="true" />
                 <span>{item.label}</span>
-                {item.count ? <span className="nav-count">{item.count}</span> : null}
+                {item.count && browserDemoDataEnabled ? <span className="nav-count">{item.count}</span> : null}
               </Link>
             );
           })}
@@ -222,7 +224,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           {!collapsed && (
             <span>
               <strong>Collection mesh</strong>
-              <small>15 / 15 sources online</small>
+              <small>{browserDemoDataEnabled ? "15 / 15 demo sources online" : "Live sources only"}</small>
             </span>
           )}
         </div>
@@ -263,15 +265,15 @@ export function AppShell({ children }: { children: ReactNode }) {
           <span>Aether</span>
         </Link>
 
-        <button className="icon-button notification-button" type="button" aria-label="Notifications: 4 unread">
+        <button className="icon-button notification-button" type="button" aria-label={browserDemoDataEnabled ? "Notifications: 4 unread" : "Notifications: none unread"}>
           <Bell size={18} />
-          <span>4</span>
+          {browserDemoDataEnabled ? <span>4</span> : null}
         </button>
         <button className="profile-button" type="button" aria-label="Open analyst profile" aria-expanded={profileOpen} onClick={() => setProfileOpen((value) => !value)}>
           {auth.principal?.avatarUrl ? <img src={auth.principal.avatarUrl} alt="" className="h-5 w-5 rounded-full" referrerPolicy="no-referrer" /> : <CircleUserRound size={20} />}
           <span>{auth.principal?.displayName ?? (auth.status === "loading" ? "Identity" : "Sign in")}</span>
         </button>
-        {profileOpen ? <div className="absolute right-3 top-[calc(100%+8px)] z-50 w-80 rounded-xl border border-white/10 bg-[#0b141d] p-4 shadow-2xl shadow-black/50"><div className="flex items-start gap-3">{auth.principal?.avatarUrl ? <img src={auth.principal.avatarUrl} alt="" className="h-10 w-10 rounded-full border border-white/10" referrerPolicy="no-referrer" /> : <span className="flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-white/[.03]"><CircleUserRound size={21} /></span>}<div className="min-w-0"><p className="truncate text-sm font-semibold text-slate-100">{auth.principal?.displayName ?? "ARGUS identity"}</p><p className="mt-1 text-[10px] text-slate-500">{auth.principal ? `@${auth.principal.login}` : "GitHub OAuth + PKCE"}</p></div></div>{auth.principal ? <><div className="mt-4 flex flex-wrap gap-1.5">{auth.principal.roles.map((role) => <span key={role} className="rounded border border-cyan-300/15 bg-cyan-300/[.05] px-2 py-1 text-[9px] uppercase tracking-[.08em] text-cyan-200">{role}</span>)}</div><p className="mt-3 text-[10px] leading-5 text-slate-500">Protected actions are checked by the Worker against these D1 roles. Interface visibility is not authorization.</p><button type="button" className="button mt-4 w-full justify-center" onClick={() => { setProfileOpen(false); void auth.signOut(); }}><LogOut size={13} /> Sign out</button></> : <><p className="mt-3 text-[10px] leading-5 text-slate-500">Sign in to receive a stable analyst ID and use role-authorized review tools. Public demonstration views remain available.</p><button type="button" className="button button-primary mt-4 w-full justify-center" disabled={auth.status === "loading"} onClick={() => void auth.signIn()}><LogIn size={13} /> Sign in with GitHub</button></>}{auth.error ? <p className="mt-3 rounded border border-red-300/15 bg-red-300/[.04] p-2 text-[10px] leading-4 text-red-200" role="alert">{auth.error}</p> : null}</div> : null}
+        {profileOpen ? <div className="absolute right-3 top-[calc(100%+8px)] z-50 w-80 rounded-xl border border-white/10 bg-[#0b141d] p-4 shadow-2xl shadow-black/50"><div className="flex items-start gap-3">{auth.principal?.avatarUrl ? <img src={auth.principal.avatarUrl} alt="" className="h-10 w-10 rounded-full border border-white/10" referrerPolicy="no-referrer" /> : <span className="flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-white/[.03]"><CircleUserRound size={21} /></span>}<div className="min-w-0"><p className="truncate text-sm font-semibold text-slate-100">{auth.principal?.displayName ?? "ARGUS identity"}</p><p className="mt-1 text-[10px] text-slate-500">{auth.principal ? `@${auth.principal.login}` : "GitHub OAuth + PKCE"}</p></div></div>{auth.principal ? <><div className="mt-4 flex flex-wrap gap-1.5">{auth.principal.roles.map((role) => <span key={role} className="rounded border border-cyan-300/15 bg-cyan-300/[.05] px-2 py-1 text-[9px] uppercase tracking-[.08em] text-cyan-200">{role}</span>)}</div><p className="mt-3 text-[10px] leading-5 text-slate-500">Protected actions are checked by the Worker against these D1 roles. Interface visibility is not authorization.</p><button type="button" className="button mt-4 w-full justify-center" onClick={() => { setProfileOpen(false); void auth.signOut(); }}><LogOut size={13} /> Sign out</button></> : <><p className="mt-3 text-[10px] leading-5 text-slate-500">Sign in to receive a stable analyst ID and use role-authorized review tools. {browserDemoDataEnabled ? "Public demonstration views remain available." : "Demonstration views are disabled."}</p><button type="button" className="button button-primary mt-4 w-full justify-center" disabled={auth.status === "loading"} onClick={() => void auth.signIn()}><LogIn size={13} /> Sign in with GitHub</button></>}{auth.error ? <p className="mt-3 rounded border border-red-300/15 bg-red-300/[.04] p-2 text-[10px] leading-4 text-red-200" role="alert">{auth.error}</p> : null}</div> : null}
       </header>
 
       <main className="app-content">{children}</main>
@@ -335,7 +337,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             <footer className="command-footer">
               <span><kbd>↵</kbd> Open</span>
               <span><kbd>↑↓</kbd> Navigate</span>
-              <span>Demonstration dataset</span>
+          <span>{browserDemoDataEnabled ? "Demonstration dataset" : "Public-information workspace"}</span>
             </footer>
           </section>
         </div>

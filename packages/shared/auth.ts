@@ -18,6 +18,7 @@ export const ARGUS_PERMISSIONS = [
   "ingestion:submit",
   "ingestion:review",
   "ingestion:retry",
+  "confidence:manage",
   "collectors:run",
   "retention:enforce",
   "demo:seed",

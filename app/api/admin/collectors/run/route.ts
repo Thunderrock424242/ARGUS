@@ -6,7 +6,9 @@ import { validateJsonBody } from "@/lib/api/validation";
 import { createAuditEntry, D1AuditRecorder } from "@/lib/audit/recorder";
 import { assertPublicHttpUrl, PublicUrlValidationError } from "@/lib/security/public-url";
 import { intelligenceDataProvider } from "@/packages/database/provider";
+import { runCollectorPilotSource } from "@/packages/database/collector-pilot";
 import {
+  collectorPilotDefinitions,
   createCollectorJob,
   createDefaultCollectors,
   executeCollectorJob,
@@ -19,7 +21,7 @@ const collectorRunSchema = z
     collectorId: z.string().trim().min(1).max(100).regex(/^[a-z0-9][a-z0-9-]*$/),
     sourceId: z.string().trim().min(1).max(160).regex(/^[a-zA-Z0-9][a-zA-Z0-9._:-]*$/),
     analystName: z.string().trim().min(1).max(100).default("Deployment Operator"),
-    mode: z.literal("dry-run").default("dry-run"),
+    mode: z.enum(["dry-run", "ingest"]).default("dry-run"),
     since: z.string().refine((value) => Number.isFinite(Date.parse(value)), "Must be a valid date-time.").optional(),
     cursor: z.string().trim().min(1).max(512).optional(),
   })
@@ -50,6 +52,73 @@ export async function POST(
 
   try {
     const actor = actorForRequest(guard.principal, body.data.analystName);
+    if (body.data.mode === "ingest") {
+      if (!context.collectorConfig || !context.collectorTransport) {
+        return jsonError(503, "collector_runtime_unavailable", "The live collector runtime is not configured.", {
+          requestId,
+          headers: guard.rateLimitHeaders,
+        });
+      }
+      const definition = collectorPilotDefinitions(context.collectorConfig).find(
+        (candidate) => candidate.collectorId === body.data.collectorId && candidate.source.id === body.data.sourceId,
+      );
+      if (!definition) {
+        return jsonError(404, "collector_source_not_found", "The selected official collector source is not registered.", {
+          requestId,
+          headers: guard.rateLimitHeaders,
+        });
+      }
+      if (!definition.active) {
+        return jsonError(409, "collector_source_disabled", definition.disabledReason ?? "The selected source is disabled.", {
+          requestId,
+          headers: guard.rateLimitHeaders,
+        });
+      }
+      const result = await runCollectorPilotSource(
+        context.database,
+        definition,
+        context.collectorTransport,
+      );
+      const audit = createAuditEntry({
+        action: "collector-run",
+        targetType: "collector",
+        targetId: definition.collectorId,
+        actorId: actor.id,
+        actorName: actor.name,
+        summary: `${actor.name} ran ${definition.source.name} through the protected collector pilot.`,
+        requestId,
+        dataClassification: "public-information",
+        after: {
+          runId: result.run.id,
+          status: result.run.status,
+          sourceId: definition.source.id,
+          reportsSeen: result.run.reportsSeen,
+          reportsInserted: result.run.reportsInserted,
+          duplicatesSkipped: result.run.duplicatesSkipped,
+          networkAccessed: true,
+        },
+      });
+      await new D1AuditRecorder(context.database).record(audit);
+      return jsonData(
+        {
+          run: result.run,
+          ingestionSubmissionIds: result.ingestionSubmissionIds,
+          networkAccessed: true,
+          persistence: "protected-ingestion-queue",
+          auditId: audit.id,
+          dataClassification: "public-information",
+        },
+        {
+          status: 202,
+          headers: guard.rateLimitHeaders,
+          meta: {
+            requestId,
+            notice: "No collected item is public until a reviewer explicitly approves it.",
+          },
+        },
+      );
+    }
+
     const sources = await intelligenceDataProvider.getSources();
     const source = sources.find((candidate) => candidate.id === body.data.sourceId);
     if (!source) {

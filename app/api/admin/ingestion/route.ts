@@ -9,6 +9,7 @@ import {
   readIngestionPage,
 } from "@/packages/database/ingestion-store";
 import { intelligenceDataProvider } from "@/packages/database/provider";
+import { PUBLIC_INFORMATION_LABEL } from "@/packages/intelligence/collector-sources";
 
 export const dynamic = "force-dynamic";
 
@@ -90,7 +91,11 @@ export async function POST(request: Request, context: AuthorizationContext = {})
       body.data,
       actorForRequest(guard.principal),
       requestId,
-      "manual",
+      {
+        method: "manual",
+        dataClassification: "public-information",
+        dataLabel: PUBLIC_INFORMATION_LABEL,
+      },
     );
     return jsonData(result.submission, {
       status: result.idempotent ? 200 : 201,
@@ -100,7 +105,7 @@ export async function POST(request: Request, context: AuthorizationContext = {})
         idempotent: result.idempotent,
         notice: result.submission.status === "duplicate"
           ? "The content matches an existing canonical report and was retained as a duplicate intake record."
-          : "The normalized submission is awaiting an explicit reviewer decision.",
+          : `The public report is visible at ${result.submission.confidence}% confidence while it awaits an explicit reviewer decision.`,
       },
     });
   } catch (error) {

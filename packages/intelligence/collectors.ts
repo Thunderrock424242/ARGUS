@@ -24,8 +24,10 @@ export interface CollectorTransportResponse {
   finalUrl: string;
   headers: Readonly<Record<string, string>>;
   body: string;
-  /** Connected address after DNS resolution; required to prevent DNS rebinding. */
-  resolvedAddress: string;
+  /** Used by non-Workers transports that can expose the connected address. */
+  resolvedAddress?: string;
+  /** Workers cannot expose a connected IP; the trusted transport instead enforces fixed host/path rules. */
+  securityPolicy?: "fixed-official-endpoint";
 }
 
 /**
@@ -93,9 +95,7 @@ export function assertPublicHttpsUrl(value: string, allowedHosts?: readonly stri
 
   if (allowedHosts?.length) {
     const normalizedAllowedHosts = allowedHosts.map(normalizeHost);
-    const allowed = normalizedAllowedHosts.some(
-      (allowedHost) => hostname === allowedHost || hostname.endsWith(`.${allowedHost}`),
-    );
+    const allowed = normalizedAllowedHosts.some((allowedHost) => hostname === allowedHost);
     if (!allowed) {
       throw new CollectorConfigurationError(`Collector endpoint host ${hostname} is not allowlisted.`);
     }
@@ -251,7 +251,9 @@ abstract class SafeStructuredCollector implements IntelligenceCollector {
       redirectPolicy: "error",
     });
     assertPublicHttpsUrl(response.finalUrl, this.allowedHosts);
-    ensureResolvedAddressIsPublic(response.resolvedAddress);
+    if (response.securityPolicy !== "fixed-official-endpoint") {
+      ensureResolvedAddressIsPublic(response.resolvedAddress);
+    }
 
     if (response.status < 200 || response.status >= 300) {
       throw new CollectorResponseError(`${this.name} returned HTTP ${response.status}.`);
@@ -353,6 +355,81 @@ export class UsgsEarthquakeCollector extends JsonApiCollector {
         longitude: numberValue(coordinates[0]),
         latitude: numberValue(coordinates[1]),
         rawPayload: feature,
+      }];
+    });
+  }
+}
+
+function plainTextValue(value: unknown): string | undefined {
+  const text = stringValue(value);
+  return text ? decodeXml(text) : undefined;
+}
+
+export class GuardianOpenPlatformCollector extends JsonApiCollector {
+  readonly id = "guardian-open-platform";
+  readonly name = "The Guardian Open Platform adapter";
+  readonly type = "api" as const;
+  protected readonly defaultEndpoint =
+    "https://content.guardianapis.com/search?order-by=newest&page-size=25&show-fields=trailText,byline";
+  protected readonly allowedHosts = ["content.guardianapis.com"];
+  protected override dryRunTitle(): string {
+    return "Synthetic international news report for the Meridian exercise";
+  }
+  protected override parse(body: string, context: CollectorContext): CollectedReport[] {
+    const response = asRecord(this.parseJson(body).response) ?? {};
+    return asRecords(response.results).flatMap((article) => {
+      const id = stringValue(article.id);
+      const title = stringValue(article.webTitle);
+      const url = stringValue(article.webUrl);
+      if (!id || !title || !url) return [];
+      const fields = asRecord(article.fields) ?? {};
+      return [{
+        externalId: id,
+        url,
+        title,
+        description: plainTextValue(fields.trailText) ?? stringValue(article.sectionName),
+        author: stringValue(fields.byline),
+        language: "en",
+        publishedAt: isoTimestamp(article.webPublicationDate, context.requestedAt),
+        rawPayload: article,
+      }];
+    });
+  }
+}
+
+export class XRecentSearchCollector extends JsonApiCollector {
+  readonly id = "x-recent-search";
+  readonly name = "X recent-search adapter";
+  readonly type = "api" as const;
+  protected readonly defaultEndpoint =
+    "https://api.x.com/2/tweets/search/recent?query=earthquake%20lang%3Aen%20-is%3Aretweet&max_results=25&tweet.fields=created_at,lang,author_id&expansions=author_id&user.fields=username";
+  protected readonly allowedHosts = ["api.x.com"];
+  protected override dryRunTitle(): string {
+    return "Synthetic social signal requiring independent corroboration";
+  }
+  protected override parse(body: string, context: CollectorContext): CollectedReport[] {
+    const root = this.parseJson(body);
+    const users = new Map(
+      asRecords(asRecord(root.includes)?.users).flatMap((user) => {
+        const id = stringValue(user.id);
+        const username = stringValue(user.username);
+        return id && username ? [[id, username] as const] : [];
+      }),
+    );
+    return asRecords(root.data).flatMap((post) => {
+      const id = stringValue(post.id);
+      const postText = stringValue(post.text);
+      if (!id || !postText) return [];
+      const username = users.get(stringValue(post.author_id) ?? "");
+      return [{
+        externalId: id,
+        url: username ? `https://x.com/${encodeURIComponent(username)}/status/${id}` : `https://x.com/i/web/status/${id}`,
+        title: postText.length > 180 ? `${postText.slice(0, 177)}...` : postText,
+        description: postText,
+        author: username ? `@${username}` : undefined,
+        language: stringValue(post.lang),
+        publishedAt: isoTimestamp(post.created_at, context.requestedAt),
+        rawPayload: post,
       }];
     });
   }
@@ -546,6 +623,8 @@ export const createDefaultCollectors = (
 ): IntelligenceCollector[] => [
   new RssAtomCollector(options),
   new UsgsEarthquakeCollector(options),
+  new GuardianOpenPlatformCollector(options),
+  new XRecentSearchCollector(options),
   new NasaEonetCollector(options),
   new GdacsCollector(options),
   new ReliefWebCollector(options),

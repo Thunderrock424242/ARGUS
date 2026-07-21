@@ -8,6 +8,7 @@ import type {
   SourceReport,
 } from "@/packages/shared/types";
 import { clamp, distanceInKilometers, hoursBetween, tokenSimilarity } from "./text";
+import { publicInformationConfidence } from "./confidence-policy";
 
 export const CONFIDENCE_MODEL_VERSION = "argus-rules-v1.0.0";
 
@@ -458,7 +459,27 @@ export function assessConfidence(evidence: ConfidenceEvidence): ConfidenceAssess
     score += applied;
   }
 
-  const finalScore = Math.round(clamp(score, 0, 99));
+  const uncappedScore = Math.round(clamp(score, 0, 99));
+  const publicInformationReports = reports.filter(
+    (report) => report.dataClassification === "public-information",
+  );
+  const publicReviewCeiling = publicInformationReports.length
+    ? Math.max(...publicInformationReports.map(publicInformationConfidence))
+    : 99;
+  if (uncappedScore > publicReviewCeiling) {
+    negativeFactors.push(
+      factor(
+        "public-review-ceiling",
+        "Public-information review ceiling",
+        `Public information is capped at ${publicReviewCeiling}% until reviewer approval or an audited administrator adjustment raises its confidence.`,
+        "negative",
+        uncappedScore - publicReviewCeiling,
+        publicReviewCeiling - uncappedScore,
+        publicInformationReports.map((report) => report.id),
+      ),
+    );
+  }
+  const finalScore = Math.min(uncappedScore, publicReviewCeiling);
   const label = confidenceLabelForScore(finalScore);
   const positiveTotal = positiveFactors.reduce((sum, item) => sum + item.appliedScore, 0);
   const negativeTotal = negativeFactors.reduce((sum, item) => sum + item.appliedScore, 0);
@@ -470,6 +491,6 @@ export function assessConfidence(evidence: ConfidenceEvidence): ConfidenceAssess
     negativeFactors,
     calculatedAt,
     modelVersion: CONFIDENCE_MODEL_VERSION,
-    explanation: `Automated confidence is ${finalScore}% (${label}). ARGUS began with a 20-point evidence baseline, applied ${positiveTotal} positive and ${Math.abs(negativeTotal)} negative points, then capped the rule-coverage score at 99. It is not a mathematical probability or analyst verification.`,
+    explanation: `Automated confidence is ${finalScore}% (${label}). ARGUS began with a 20-point evidence baseline, applied ${positiveTotal} positive and ${Math.abs(negativeTotal)} negative points, then capped the rule-coverage score at ${publicReviewCeiling < 99 ? `${publicReviewCeiling} under the public-information review policy` : "99"}. It is not a mathematical probability or analyst verification.`,
   };
 }

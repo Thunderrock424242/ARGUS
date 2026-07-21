@@ -18,7 +18,7 @@ The public demonstration is published at [thunderrock424242.github.io/ARGUS](htt
 - Sources, review queues, watchlists, briefs, system health, and Aether surfaces
 - 24 fictional events, 60+ reports, 15 sources, 10 watchlists, and 5 briefs
 - Rule-based duplicate detection, event correlation, claim extraction, contradiction checks, and confidence scoring
-- Network-free development collectors for RSS/Atom, USGS, NASA EONET, GDACS, ReliefWeb, NWS, CISA KEV, and GDELT
+- Network-free development collectors plus a disabled-by-default Worker pilot for USGS, The Guardian Open Platform, and X recent search
 - Paginated read APIs plus identity-protected D1 review, audit, owner-layout, alert, seed, and retention routes
 - A protected ingestion queue with provenance, SHA-256 content hashes, idempotent intake, duplicate quarantine, versioned review, retries, and canonical report approval
 - A versioned D1 read-model provider, durable audit path, Drizzle schema, and migrations
@@ -38,7 +38,7 @@ Copy-Item .env.example .env.local
 npm run dev
 ```
 
-The Vite development server runs the interface. Run `npm run brain:dev` in a second terminal when testing the standalone REST API and Aether Worker. The published interface is fully static and starts from fictional fixtures, then hydrates the Global Operations View from the Worker when `VITE_ARGUS_API_URL` is configured. It keeps the bundled fallback if that Worker is unavailable.
+The Vite development server runs the interface. Run `npm run brain:dev` in a second terminal when testing the standalone REST API and Aether Worker. The published interface is fully static and hydrates the Global Operations View from the Worker when `VITE_ARGUS_API_URL` is configured. Fictional fixture fallback is available only while `VITE_ARGUS_DEMO_ENABLED` is enabled.
 
 Useful verification commands:
 
@@ -54,8 +54,8 @@ npm run build
 ## Free hosting split
 
 - **Site:** GitHub Pages serves the static interface at no application-server cost.
-- **Brain:** Cloudflare Workers serves read APIs, deterministic Aether, scheduled retention, and disabled-by-default administrative routes.
-- **Data:** the Worker selects D1 when a `DB` binding exists and otherwise uses immutable fictional fixtures. Empty or unavailable D1 collections fall back independently, so a first deployment remains usable.
+- **Brain:** Cloudflare Workers serves read APIs, deterministic Aether, scheduled retention, and a disabled-by-default official-source collector pilot.
+- **Data:** the Worker selects D1 when a `DB` binding exists. Immutable fictional fixture fallback is available only when `ARGUS_DEMO_ENABLED=true`; disabling it also filters demonstration rows already stored in D1.
 
 Validate and deploy the Worker with:
 
@@ -70,7 +70,7 @@ The Pages workflow pins the public `https://argus-brain.thunderrock-labs.workers
 
 The Worker supports GitHub OAuth with PKCE, hashed short-lived D1 sessions, stable user IDs, explicit roles, and D1-backed rate limits. New identities receive `viewer`; reviewer, source-manager, and administrator permissions are granted through the audited role API. The public deployment has completed this bootstrap, while each additional deployment must follow [Identity and roles](docs/identity-and-roles.md).
 
-Event reviews, relationship reviews, ingestion decisions, alert actions, monitoring layouts, read-model seeding, and retention operate on versioned D1 records and append audit/history entries. The ingestion queue normalizes and hashes evidence, rejects unsafe URLs, quarantines canonical duplicates, and creates a public report only after reviewer approval. Mutable actions carry the loaded D1 revision and reject stale edits instead of silently overwriting newer work; layouts are scoped to the stable signed-in owner ID. The browser sends only a short-lived ARGUS session; GitHub and bootstrap secrets never enter the Pages bundle. `ARGUS_ADMIN_TOKEN` remains command-line bootstrap/recovery access and must never be placed in `VITE_`, a URL, a committed file, a log, or a browser response. Administrative collector requests remain `dry-run`; they cannot turn on network collection.
+Event reviews, relationship reviews, ingestion decisions, confidence adjustments, alert actions, monitoring layouts, read-model seeding, and retention operate on versioned D1 records and append audit/history entries. The ingestion queue normalizes and hashes evidence, rejects unsafe URLs, quarantines canonical duplicates, and immediately exposes new public-information reports at a 25% low-confidence ceiling. Reviewer approval raises the default ceiling to 60%; only administrators can set another value, and rejection removes the public read model while retaining the protected intake and audit reason. The allowlisted collector pilot uses fixed official hosts, refuses redirects, bounds response time and bytes, records retry/dead-letter state in D1, and can only write through that policy-controlled queue. Mutable actions carry the loaded D1 revision and reject stale edits instead of silently overwriting newer work; layouts are scoped to the stable signed-in owner ID. The browser sends only a short-lived ARGUS session; GitHub, Guardian, X, and bootstrap secrets never enter the Pages bundle. `ARGUS_ADMIN_TOKEN` remains command-line bootstrap/recovery access and must never be placed in `VITE_`, a URL, a committed file, a log, or a browser response.
 
 ## Public Worker endpoints
 
@@ -90,9 +90,9 @@ Event reviews, relationship reviews, ingestion decisions, alert actions, monitor
 | GET | `/api/operations` | Global Operations counts and latest alerts |
 | GET | `/api/operations/snapshot` | Hydration snapshot for the Global Operations View |
 
-Identity endpoints include `GET /api/auth/config`, `POST /api/auth/exchange`, `GET /api/auth/session`, and `POST /api/auth/logout`. Protected Worker endpoints include event and relationship review, ingestion intake/list/review/retry, alert and layout actions, dry-run collector execution, demonstration seeding, retention, user listing, and role assignment.
+Identity endpoints include `GET /api/auth/config`, `POST /api/auth/exchange`, `GET /api/auth/session`, and `POST /api/auth/logout`. Protected Worker endpoints include event and relationship review, ingestion intake/list/review/retry, administrator confidence adjustment, collector status and controlled execution, alert and layout actions, demonstration seeding, retention, user listing, and role assignment.
 
-These endpoints run under `npm run brain:dev` and are hosted by the standalone Worker, not at the GitHub Pages origin. Protected reads also include `GET /api/admin/audit`, `GET /api/admin/layouts`, and `GET /api/admin/ingestion`; `POST /api/admin/ingestion` submits evidence, `POST /api/admin/ingestion/:id` records a reviewer decision, and `POST /api/admin/ingestion/:id/retry` retries a failed record. All API responses are `no-store`, carry a request ID, redact credential-shaped fields, and label fictional data. Unknown query and body fields are rejected. Administrative handlers require both explicit server configuration and authorization.
+These endpoints run under `npm run brain:dev` and are hosted by the standalone Worker, not at the GitHub Pages origin. Protected reads also include `GET /api/admin/audit`, `GET /api/admin/layouts`, `GET /api/admin/ingestion`, and `GET /api/admin/collectors`; `POST /api/admin/collectors/run` performs an authorized dry-run or sends an active pilot source into protected intake. All API responses are `no-store`, carry a request ID, and redact credential-shaped fields. Unknown query and body fields are rejected. Administrative handlers require both explicit server configuration and authorization.
 
 ## Documentation
 
@@ -104,6 +104,7 @@ These endpoints run under `npm run brain:dev` and are hosted by the standalone W
 - [Processing, correlation, and confidence](docs/intelligence-pipeline.md)
 - [Analyst review workflows](docs/analyst-workflows.md)
 - [Aether and map architecture](docs/aether-and-map.md)
+- [Orbital Watch implementation design](docs/orbital-awareness.md)
 - [Operations intelligence, impact, market, alerts, cameras, and playback](docs/operations-intelligence.md)
 - [Security and ethical OSINT](docs/security-and-ethics.md)
 - [Deployment, limitations, and roadmap](docs/deployment-and-roadmap.md)
