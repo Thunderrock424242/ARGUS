@@ -2,7 +2,7 @@ import { createContext, type ReactNode, useCallback, useContext, useEffect, useM
 import { useAuth } from "@/components/auth/auth-provider";
 import { DEFAULT_DATASET } from "@/packages/database/provider";
 import { demoAuditEntries, demoTimelineEntries } from "@/packages/shared/demo-data";
-import { browserDemoDataEnabled } from "@/lib/config/demo-mode";
+import { browserDemoDataEnabled, recordsVisibleInDemoMode } from "@/lib/config/demo-mode";
 import type {
   AuditLogEntry,
   EventTimelineEntry,
@@ -77,10 +77,19 @@ export function RuntimeDataProvider({ children }: { children: ReactNode }) {
         if (!active) return;
         const effectiveDemoEnabled = browserDemoDataEnabled && payload.meta?.demoDataEnabled !== false;
         setData((current) => ({
-          ...current,
-          ...payload.data,
-          timelineEntries: payload.data.stateHistory ?? current.timelineEntries,
-          auditEntries: effectiveDemoEnabled ? current.auditEntries : [],
+          events: recordsVisibleInDemoMode(payload.data.events, effectiveDemoEnabled) ?? current.events,
+          reports: recordsVisibleInDemoMode(payload.data.reports, effectiveDemoEnabled) ?? current.reports,
+          sources: recordsVisibleInDemoMode(payload.data.sources, effectiveDemoEnabled) ?? current.sources,
+          relationships: recordsVisibleInDemoMode(payload.data.relationships, effectiveDemoEnabled) ?? current.relationships,
+          graphNodes: recordsVisibleInDemoMode(payload.data.graphNodes, effectiveDemoEnabled) ?? current.graphNodes,
+          relationshipHistory: recordsVisibleInDemoMode(payload.data.relationshipHistory, effectiveDemoEnabled) ?? current.relationshipHistory,
+          marketAssets: recordsVisibleInDemoMode(payload.data.marketAssets, effectiveDemoEnabled) ?? current.marketAssets,
+          marketImpacts: recordsVisibleInDemoMode(payload.data.marketImpacts, effectiveDemoEnabled) ?? current.marketImpacts,
+          alerts: recordsVisibleInDemoMode(payload.data.alerts, effectiveDemoEnabled) ?? current.alerts,
+          timelineEntries: recordsVisibleInDemoMode(payload.data.stateHistory ?? payload.data.timelineEntries, effectiveDemoEnabled) ?? current.timelineEntries,
+          auditEntries: effectiveDemoEnabled
+            ? recordsVisibleInDemoMode(payload.data.auditEntries, true) ?? current.auditEntries
+            : recordsVisibleInDemoMode(payload.data.auditEntries, false) ?? [],
         }));
         setDemoEnabled(effectiveDemoEnabled);
         setSource(response.headers.get("x-argus-data-store") === "d1" ? "d1" : "worker-fixtures");
@@ -94,7 +103,12 @@ export function RuntimeDataProvider({ children }: { children: ReactNode }) {
           const auditResponse = await auth.authenticatedFetch("/api/admin/audit?page=1&limit=100", { signal: controller.signal });
           if (!auditResponse.ok) throw new Error("The audit history was not accepted.");
           const auditPayload = await auditResponse.json() as { data: AuditLogEntry[] };
-          if (active) setData((current) => ({ ...current, auditEntries: auditPayload.data }));
+          if (active) {
+            setData((current) => ({
+              ...current,
+              auditEntries: recordsVisibleInDemoMode(auditPayload.data, browserDemoDataEnabled) ?? [],
+            }));
+          }
         } catch {
           // The durable public data remains useful if protected audit history is unavailable.
         }

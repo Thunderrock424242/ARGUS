@@ -2,7 +2,7 @@
 	"$schema": "node_modules/wrangler/config-schema.json",
 	"name": "argus-brain",
 	"main": "worker/index.ts",
-	"compatibility_date": "2026-07-20",
+	"compatibility_date": "2026-07-21",
 	"compatibility_flags": [
 		"nodejs_compat"
 	],
@@ -16,8 +16,8 @@
 		"ALLOWED_ORIGINS": "https://thunderrock424242.github.io,http://localhost:5173,http://127.0.0.1:5173",
 		"AUTH_CALLBACK_URL": "https://thunderrock424242.github.io/ARGUS/",
 		"AUTH_SESSION_TTL_SECONDS": "28800",
-		"ARGUS_DEMO_ENABLED": "true",
-		"COLLECTOR_PILOT_ENABLED": "false",
+		"ARGUS_DEMO_ENABLED": "false",
+		"COLLECTOR_PILOT_ENABLED": "true",
 		"COLLECTOR_USGS_ENABLED": "true",
 		"COLLECTOR_GUARDIAN_ENABLED": "true",
 		"COLLECTOR_X_ENABLED": "false",

@@ -32,8 +32,21 @@ import {
   exponentialBackoffMs,
   nextScheduledCollectionAt,
 } from "@/packages/intelligence/collector-runtime";
+import { recordsVisibleInDemoMode } from "@/lib/config/demo-mode";
 
 describe("ARGUS demonstration fixtures", () => {
+  it("removes demonstration records when the browser kill switch is disabled", () => {
+    const records = [
+      { id: "demo", dataClassification: "demonstration" },
+      { id: "public", dataClassification: "public-information" },
+    ];
+
+    expect(recordsVisibleInDemoMode(records, false)).toEqual([
+      { id: "public", dataClassification: "public-information" },
+    ]);
+    expect(recordsVisibleInDemoMode(records, true)).toEqual(records);
+  });
+
   it("provides the requested volume and labels every user-facing record", () => {
     expect(demoEvents.length).toBeGreaterThanOrEqual(24);
     expect(demoReports.length).toBeGreaterThanOrEqual(60);
