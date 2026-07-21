@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import worker from "@/worker/index";
-import { demoEvents } from "@/packages/shared/demo-data";
+import { demoEvents, demoSources } from "@/packages/shared/demo-data";
 import { FakeD1Database } from "./helpers/fake-d1";
 
 const env = { ALLOWED_ORIGINS: "https://thunderrock424242.github.io" };
@@ -110,5 +110,33 @@ describe("standalone ARGUS brain Worker", () => {
     expect(response.status).toBe(200);
     expect(payload.data.relationships.length).toBeGreaterThan(0);
     expect(payload.meta.warning).toContain("causation");
+  });
+
+  it("mounts the protected ingestion queue through the standalone Worker", async () => {
+    const database = new FakeD1Database();
+    const token = "worker-ingestion-admin-token";
+    const response = await worker.fetch(
+      new Request("https://argus-brain.example/api/admin/ingestion", {
+        method: "POST",
+        headers: {
+          origin: "https://thunderrock424242.github.io",
+          authorization: `Bearer ${token}`,
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          sourceId: demoSources.find((source) => source.enabled)?.id ?? demoSources[0].id,
+          url: "https://example.org/argus/worker-ingestion",
+          title: "Worker route ingestion demonstration report",
+          description: "Fictional evidence submitted through the Worker routing layer.",
+          publishedAt: "2042-03-11T12:00:00.000Z",
+        }),
+      }),
+      { ...env, ARGUS_ADMIN_TOKEN: token, DB: database },
+    );
+    const payload = await response.json() as { data: { status: string; recordVersion: number } };
+    expect(response.status).toBe(201);
+    expect(response.headers.get("x-argus-data-store")).toBe("d1");
+    expect(payload.data).toMatchObject({ status: "needs-review", recordVersion: 1 });
+    expect(database.auditRows.at(-1)?.[5]).toBe("ingestion-submitted");
   });
 });

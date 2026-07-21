@@ -54,6 +54,12 @@ A production review service should:
 
 The audit log should be append-only for ordinary application roles. Corrections should create a new record that references the prior action rather than rewriting history.
 
+## Ingestion review
+
+Evidence submitted through `/ingestion` is not a report yet. ARGUS validates the bounded JSON body and public HTTPS URL, normalizes text and canonical URL fields, calculates a SHA-256 content hash, checks a hashed idempotency key, and retains provenance in the protected D1 queue. An exact match against a canonical report is marked `duplicate` and cannot be approved again.
+
+A Reviewer or Administrator can approve or reject a `needs-review` submission with a reason and the loaded `recordVersion`. Approval creates one canonical source report and the audit record in the same D1 batch. Rejection preserves the submitted evidence, reviewer identity, reason, and audit entry without adding it to public report reads. Stale or repeated decisions return `409`.
+
 ## Analyst standards
 
 - Separate observed facts, source claims, ARGUS inference, analyst judgment, and Aether analysis.

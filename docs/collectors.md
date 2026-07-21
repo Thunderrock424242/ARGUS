@@ -2,13 +2,13 @@
 
 ## Collector contract
 
-An `IntelligenceCollector` has an ID, display name, source type, and one `collect(context)` method. The context carries the configured source, request ID, collection time, optional cursor/since values, abort signal, and no ambient credentials. A collector returns normalized `CollectedReport` candidates; it does not write directly to the database.
+An `IntelligenceCollector` has an ID, display name, source type, and one `collect(context)` method. The context carries the configured source, request ID, collection time, optional cursor/since values, abort signal, and no ambient credentials. A collector returns normalized `CollectedReport` candidates; it does not write directly to the database. The trusted runtime must pass each candidate through the same `createIngestionSubmission` boundary used by manual/API intake.
 
 Included adapters cover RSS/Atom, USGS Earthquake GeoJSON, NASA EONET, GDACS, ReliefWeb, National Weather Service alerts, CISA Known Exploited Vulnerabilities, and GDELT discovery data. They default to `dry-run` and emit labeled synthetic output without network access.
 
 ## Production execution
 
-Use platform cron or a persistent queue to create collector jobs. `executeCollectorJob` runs exactly one job and returns a collector run plus a retry job or dead-letter outcome. Exponential backoff is bounded and jitter-ready. Store jobs, cursors, last-success timestamps, and dead letters durably; never rely on `setInterval` inside a web process.
+Use platform cron or a persistent queue to create collector jobs. `executeCollectorJob` runs exactly one job and returns a collector run plus a retry job or dead-letter outcome. Exponential backoff is bounded and jitter-ready. Store jobs, cursors, last-success timestamps, and dead letters durably; never rely on `setInterval` inside a web process. ARGUS now has durable ingestion submissions and attempt history, but the production collector queue, consumer, and dead-letter binding are not deployed yet.
 
 Suggested schedules are starting points, not promises:
 

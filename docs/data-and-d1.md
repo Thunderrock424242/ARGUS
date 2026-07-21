@@ -4,7 +4,7 @@
 
 Application code reads through `IntelligenceDataProvider`. `MockIntelligenceDataProvider` returns a fresh structured clone on every call, preventing a page or test from mutating canonical fixtures. `D1IntelligenceDataProvider` reads complete versioned documents from `intelligence_read_models` and falls back per collection when D1 is empty or temporarily unavailable.
 
-Reads remain separate from `durable-operations.ts`. Event and relationship reviews, alert actions, layout saves, historical snapshots, and audit records use D1 batch operations. A failed batch does not return a successful analyst decision.
+Reads remain separate from `durable-operations.ts`. Event and relationship reviews, ingestion decisions, alert actions, layout saves, historical snapshots, and audit records use D1 batch operations. A failed batch does not return a successful analyst decision.
 
 ## D1 binding and Drizzle
 
@@ -42,6 +42,7 @@ The schema includes:
 - confidence assessments with factor JSON
 - analyst reviews and append-only audit logs
 - collector runs and review queue items
+- normalized ingestion submissions and append-only attempt records
 - watchlists and intelligence briefs
 - versioned materialized API documents used by the Worker
 - GitHub identities, roles, hashed sessions, and durable rate-limit counters
@@ -55,7 +56,7 @@ Fields used for filtering and relationships remain typed columns; richer evolvin
 - `MemoryAuditRecorder` is bounded and suitable only for development/tests.
 - `D1AuditRecorder` targets the existing `audit_logs` table through a small structural D1 interface.
 
-Protected Worker review routes now return `durability: "d1"` and `canonicalDataMutated: true` only after the versioned document, state/history entry, and audit row succeed. The older memory recorder remains available solely for isolated service tests.
+Protected Worker review routes return durable success only after their versioned target and audit/history records succeed. Ingestion approval additionally creates the canonical report read model in the same D1 batch; rejection retains the protected submission and reason without publishing a report. The older memory recorder remains available solely for isolated service tests.
 
 ## Development data
 
@@ -73,8 +74,8 @@ Fixtures must never reuse a real breaking event, vulnerable person, operational 
 
 1. Provision a D1 database for the standalone Worker and apply reviewed migrations.
 2. Seed or ingest records and verify the `X-ARGUS-Data-Store: d1` response header.
-3. Implement idempotent live report inserts keyed by source/external ID, canonical URL, and content hash.
-4. Extend the current transactional read-model writes to normalized evidence links and ingestion queues.
+3. Route live collectors through the implemented idempotent ingestion service instead of writing reports directly.
+4. Extend approved submissions into normalized report/evidence link tables in addition to the current canonical read model.
 5. Add cursor pagination and query indexes based on measured workloads.
 6. Add backup/export, retention, correction, and deletion procedures.
 7. Keep raw evidence access restricted and record every read or export that requires elevated permission.

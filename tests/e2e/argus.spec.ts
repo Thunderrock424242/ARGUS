@@ -57,8 +57,15 @@ test("review decisions require an authenticated ARGUS identity", async ({ page }
   await expect(page.getByRole("status")).toContainText("Sign in with GitHub before recording a durable analyst decision");
 });
 
+test("ingestion exposes a protected intake boundary", async ({ page }) => {
+  await gotoArgus(page, "/ingestion");
+  await expect(page.getByRole("heading", { name: "Ingestion queue" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Sign in to use ingestion" })).toBeVisible();
+  await expect(page.getByText(/contains protected provenance and reviewer actions/)).toBeVisible();
+});
+
 test("all primary analyst routes remain reachable", async ({ page }) => {
-  for (const route of ["/map", "/sources", "/watchlists", "/briefs", "/aether", "/system", "/settings", "/relationships", "/consequences", "/conflicts", "/timeline", "/alerts", "/live-feeds", "/wall"]) {
+  for (const route of ["/map", "/sources", "/ingestion", "/watchlists", "/briefs", "/aether", "/system", "/settings", "/relationships", "/consequences", "/conflicts", "/timeline", "/alerts", "/live-feeds", "/wall"]) {
     const response = await gotoArgus(page, route);
     expect(response?.status(), route).toBe(200);
     await expect(page.getByText(/Demonstration data — not real-world intelligence/).first()).toBeVisible();

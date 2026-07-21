@@ -3,6 +3,9 @@ import { POST as actOnAlert } from "@/app/api/admin/alerts/[id]/route";
 import { GET as getAuditLog } from "@/app/api/admin/audit/route";
 import { POST as seedDemoData } from "@/app/api/admin/demo-seed/route";
 import { POST as runCollector } from "@/app/api/admin/collectors/run/route";
+import { GET as getIngestion, POST as submitIngestion } from "@/app/api/admin/ingestion/route";
+import { POST as reviewIngestion } from "@/app/api/admin/ingestion/[id]/route";
+import { POST as retryIngestion } from "@/app/api/admin/ingestion/[id]/retry/route";
 import { PUT as saveLayout } from "@/app/api/admin/layouts/[id]/route";
 import { GET as getLayouts } from "@/app/api/admin/layouts/route";
 import { POST as reviewRelationship } from "@/app/api/admin/relationships/[id]/route";
@@ -157,6 +160,12 @@ async function route(request: Request, env: BrainEnv): Promise<Response> {
   if (request.method === "POST" && pathname === "/api/admin/collectors/run") {
     return runCollector(request, adminContext);
   }
+  if (request.method === "GET" && pathname === "/api/admin/ingestion") {
+    return getIngestion(request, adminContext);
+  }
+  if (request.method === "POST" && pathname === "/api/admin/ingestion") {
+    return submitIngestion(request, adminContext);
+  }
   if (request.method === "GET" && pathname === "/api/admin/users") {
     return listUsers(request, adminContext);
   }
@@ -194,6 +203,20 @@ async function route(request: Request, env: BrainEnv): Promise<Response> {
     const id = decodePathSegment(layoutSaveMatch[1]);
     return id
       ? saveLayout(request, { ...adminContext, params: Promise.resolve({ id }) })
+      : jsonError(400, "invalid_path", "The request path is invalid.", { requestId: requestIdFrom(request) });
+  }
+  const ingestionRetryMatch = pathname.match(/^\/api\/admin\/ingestion\/([^/]+)\/retry$/);
+  if (request.method === "POST" && ingestionRetryMatch) {
+    const id = decodePathSegment(ingestionRetryMatch[1]);
+    return id
+      ? retryIngestion(request, { ...adminContext, params: Promise.resolve({ id }) })
+      : jsonError(400, "invalid_path", "The request path is invalid.", { requestId: requestIdFrom(request) });
+  }
+  const ingestionReviewMatch = pathname.match(/^\/api\/admin\/ingestion\/([^/]+)$/);
+  if (request.method === "POST" && ingestionReviewMatch) {
+    const id = decodePathSegment(ingestionReviewMatch[1]);
+    return id
+      ? reviewIngestion(request, { ...adminContext, params: Promise.resolve({ id }) })
       : jsonError(400, "invalid_path", "The request path is invalid.", { requestId: requestIdFrom(request) });
   }
   if (pathname.startsWith("/api/admin")) {

@@ -39,6 +39,79 @@ interface StoredAuthSession {
   revokedAt: string | null;
 }
 
+interface StoredIngestionSubmission {
+  id: string;
+  sourceId: string;
+  externalId: string | null;
+  idempotencyKey: string;
+  contentHash: string;
+  url: string;
+  normalizedUrl: string;
+  title: string;
+  description: string | null;
+  bodyText: string | null;
+  author: string | null;
+  language: string;
+  publishedAt: string;
+  latitude: number | null;
+  longitude: number | null;
+  countryCode: string | null;
+  category: string | null;
+  status: string;
+  duplicateOfReportId: string | null;
+  attempts: number;
+  lastError: string | null;
+  nextRetryAt: string | null;
+  submittedAt: string;
+  updatedAt: string;
+  reviewedAt: string | null;
+  reviewedById: string | null;
+  reviewedByName: string | null;
+  reviewReason: string | null;
+  provenance: string;
+  dataClassification: string;
+  demoDataLabel: string;
+  version: number;
+}
+
+function ingestionRow(row: StoredIngestionSubmission, totalCount?: number): Record<string, unknown> {
+  return {
+    id: row.id,
+    source_id: row.sourceId,
+    external_id: row.externalId,
+    idempotency_key: row.idempotencyKey,
+    content_hash: row.contentHash,
+    url: row.url,
+    normalized_url: row.normalizedUrl,
+    title: row.title,
+    description: row.description,
+    body_text: row.bodyText,
+    author: row.author,
+    language: row.language,
+    published_at: row.publishedAt,
+    latitude: row.latitude,
+    longitude: row.longitude,
+    country_code: row.countryCode,
+    category: row.category,
+    status: row.status,
+    duplicate_of_report_id: row.duplicateOfReportId,
+    attempts: row.attempts,
+    last_error: row.lastError,
+    next_retry_at: row.nextRetryAt,
+    submitted_at: row.submittedAt,
+    updated_at: row.updatedAt,
+    reviewed_at: row.reviewedAt,
+    reviewed_by_id: row.reviewedById,
+    reviewed_by_name: row.reviewedByName,
+    review_reason: row.reviewReason,
+    provenance: row.provenance,
+    data_classification: row.dataClassification,
+    demo_data_label: row.demoDataLabel,
+    version: row.version,
+    ...(totalCount === undefined ? {} : { total_count: totalCount }),
+  };
+}
+
 class FakeD1Statement implements D1PreparedStatementLike {
   private values: unknown[] = [];
 
@@ -54,6 +127,20 @@ class FakeD1Statement implements D1PreparedStatementLike {
 
   async all<T>(): Promise<{ results?: T[] }> {
     const normalized = this.query.toLocaleLowerCase("en-US");
+    if (normalized.includes("from ingestion_submissions")) {
+      let valueIndex = 0;
+      const status = normalized.includes("status = ?") ? String(this.values[valueIndex++]) : undefined;
+      const sourceId = normalized.includes("source_id = ?") ? String(this.values[valueIndex++]) : undefined;
+      const limit = Number(this.values[valueIndex++]);
+      const offset = Number(this.values[valueIndex]);
+      const filtered = [...this.database.ingestionSubmissions.values()]
+        .filter((row) => !status || row.status === status)
+        .filter((row) => !sourceId || row.sourceId === sourceId)
+        .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt) || right.id.localeCompare(left.id));
+      return {
+        results: filtered.slice(offset, offset + limit).map((row) => ingestionRow(row, filtered.length)) as T[],
+      };
+    }
     if (normalized.includes("from audit_logs")) {
       const filtered = normalized.includes("where target_id = ?")
         ? this.database.auditRows.filter((row) => row[7] === this.values[0])
@@ -102,6 +189,27 @@ class FakeD1Statement implements D1PreparedStatementLike {
 
   async first<T>(): Promise<T | null> {
     const normalized = this.query.toLocaleLowerCase("en-US");
+    if (normalized.includes("from ingestion_submissions")) {
+      const identifier = String(this.values[0]);
+      const row = normalized.includes("idempotency_key = ?")
+        ? [...this.database.ingestionSubmissions.values()].find((candidate) =>
+            candidate.idempotencyKey === identifier || (
+              normalized.includes("source_id = ?") &&
+              candidate.sourceId === String(this.values[1]) &&
+              candidate.externalId === String(this.values[2])
+            ),
+          )
+        : this.database.ingestionSubmissions.get(identifier);
+      return row ? ingestionRow(row) as T : null;
+    }
+    if (normalized.includes("json_extract(document, '$.contenthash')")) {
+      const contentHash = String(this.values[0]);
+      const row = [...this.database.readModels.values()].find((candidate) => {
+        if (candidate.collection !== "reports") return false;
+        return (JSON.parse(candidate.document) as { contentHash?: string }).contentHash === contentHash;
+      });
+      return row ? ({ record_id: row.recordId } as T) : null;
+    }
     if (normalized.startsWith("insert into auth_rate_limits")) {
       const [keyHash, windowStartedAt, expiresAt] = this.values as [string, number, number];
       const key = `${keyHash}:${windowStartedAt}`;
@@ -143,6 +251,60 @@ class FakeD1Statement implements D1PreparedStatementLike {
 
   async run(): Promise<D1MutationResultLike> {
     const normalized = this.query.trim().toLocaleLowerCase("en-US");
+    if (normalized.startsWith("insert or ignore into ingestion_submissions")) {
+      const [id, sourceId, externalId, idempotencyKey, contentHash, url, normalizedUrl, title, description, bodyText, author, language, publishedAt, latitude, longitude, countryCode, category, status, duplicateOfReportId, submittedAt, updatedAt, provenance, demoDataLabel] = this.values as [string, string, string | null, string, string, string, string, string, string | null, string | null, string | null, string, string, number | null, number | null, string | null, string | null, string, string | null, string, string, string, string];
+      const conflict = [...this.database.ingestionSubmissions.values()].find((row) =>
+        row.idempotencyKey === idempotencyKey || Boolean(externalId && row.sourceId === sourceId && row.externalId === externalId),
+      );
+      if (conflict) return { meta: { changes: 0 } };
+      this.database.ingestionSubmissions.set(id, {
+        id, sourceId, externalId, idempotencyKey, contentHash, url, normalizedUrl, title,
+        description, bodyText, author, language, publishedAt, latitude, longitude, countryCode,
+        category, status, duplicateOfReportId, attempts: 1, lastError: null, nextRetryAt: null,
+        submittedAt, updatedAt, reviewedAt: null, reviewedById: null, reviewedByName: null,
+        reviewReason: null, provenance, dataClassification: "demonstration", demoDataLabel, version: 1,
+      });
+      return { meta: { changes: 1 } };
+    }
+    if (normalized.startsWith("insert into ingestion_attempts")) {
+      const [id, submissionId, attempt, stateOrStartedAt, startedOrCompletedAt, completedOrRequestId, maybeRequestId, dependencyId, dependencyVersion] = this.values;
+      const hasExplicitAttempt = typeof attempt === "number";
+      const actualAttempt = hasExplicitAttempt ? Number(attempt) : 1;
+      const actualState = hasExplicitAttempt ? "retried" : "accepted";
+      const actualStartedAt = String(hasExplicitAttempt ? stateOrStartedAt : attempt);
+      const actualCompletedAt = String(hasExplicitAttempt ? startedOrCompletedAt : stateOrStartedAt);
+      const actualRequestId = String(hasExplicitAttempt ? completedOrRequestId : startedOrCompletedAt);
+      const actualDependencyId = String(hasExplicitAttempt ? maybeRequestId : completedOrRequestId);
+      const actualDependencyVersion = hasExplicitAttempt ? Number(dependencyId) : 1;
+      const submission = this.database.ingestionSubmissions.get(actualDependencyId);
+      if (!submission || submission.version !== actualDependencyVersion) return { meta: { changes: 0 } };
+      this.database.ingestionAttempts.push({ id: String(id), submissionId: String(submissionId), attempt: actualAttempt, state: actualState, startedAt: actualStartedAt, completedAt: actualCompletedAt, requestId: actualRequestId });
+      void dependencyVersion;
+      return { meta: { changes: 1 } };
+    }
+    if (normalized.startsWith("update ingestion_submissions set status = ?")) {
+      const [status, updatedAt, reviewedAt, reviewedById, reviewedByName, reviewReason, id, expectedVersion] = this.values as [string, string, string, string, string, string, string, number];
+      const row = this.database.ingestionSubmissions.get(id);
+      if (!row || row.version !== expectedVersion || row.status !== "needs-review") return { meta: { changes: 0 } };
+      Object.assign(row, { status, updatedAt, reviewedAt, reviewedById, reviewedByName, reviewReason, version: row.version + 1 });
+      return { meta: { changes: 1 } };
+    }
+    if (normalized.startsWith("update ingestion_submissions set status = 'needs-review'")) {
+      const [updatedAt, id, expectedVersion] = this.values as [string, string, number];
+      const row = this.database.ingestionSubmissions.get(id);
+      if (!row || row.version !== expectedVersion || row.status !== "failed") return { meta: { changes: 0 } };
+      Object.assign(row, { status: "needs-review", attempts: row.attempts + 1, lastError: null, nextRetryAt: null, updatedAt, version: row.version + 1 });
+      return { meta: { changes: 1 } };
+    }
+    if (normalized.startsWith("insert into intelligence_read_models") && normalized.includes("from ingestion_submissions")) {
+      const [id, recordId, document, updatedAt, submissionId, requiredVersion] = this.values as [string, string, string, string, string, number];
+      const dependency = this.database.ingestionSubmissions.get(submissionId);
+      if (!dependency || dependency.status !== "approved" || dependency.version !== requiredVersion) return { meta: { changes: 0 } };
+      const key = `reports:${recordId}`;
+      if (this.database.readModels.has(key)) return { meta: { changes: 0 } };
+      this.database.readModels.set(key, { id, collection: "reports", recordId, slug: null, document, version: 1, sortOrder: 0, updatedAt, dataClassification: "demonstration" });
+      return { meta: { changes: 1 } };
+    }
     if (normalized.startsWith("insert into intelligence_read_models") && normalized.includes("where ? = 0 or exists")) {
       const [id, collection, recordId, slug, document, sortOrder, updatedAt, dataClassification, expectedVersion, dependencyCollection, dependencyRecordId, dependencyVersion, updateExpectedVersion] = this.values as [string, string, string, string | null, string, number, string, string, number, string, string, number, number];
       const key = `${collection}:${recordId}`;
@@ -201,6 +363,18 @@ class FakeD1Statement implements D1PreparedStatementLike {
     }
     if (normalized.startsWith("insert into audit_logs")) {
       if (normalized.includes("where exists")) {
+        if (normalized.includes("from ingestion_submissions")) {
+          const dependencyId = String(this.values.at(-2));
+          const dependencyVersion = Number(this.values.at(-1));
+          const dependency = this.database.ingestionSubmissions.get(dependencyId);
+          if (dependency?.version !== dependencyVersion) return { meta: { changes: 0 } };
+          this.database.auditRows.push([
+            this.values[0], this.values[1], "analyst", this.values[2], this.values[3], this.values[4],
+            "ingestion-submission", this.values[5], this.values[6], this.values[7], this.values[8],
+            this.values[9], this.values[10], "demonstration",
+          ]);
+          return { meta: { changes: 1 } };
+        }
         const [dependencyCollection, dependencyRecordId, dependencyVersion, dependencyDocument] = this.values.slice(14) as [string, string, number, string];
         const dependency = this.database.readModels.get(`${dependencyCollection}:${dependencyRecordId}`);
         if (dependency?.version !== dependencyVersion || dependency.document !== dependencyDocument) return { meta: { changes: 0 } };
@@ -291,6 +465,8 @@ export class FakeD1Database implements D1DocumentDatabase {
   readonly authRoles = new Map<string, Set<string>>();
   readonly authSessions = new Map<string, StoredAuthSession>();
   readonly rateLimits = new Map<string, { count: number; expiresAt: number }>();
+  readonly ingestionSubmissions = new Map<string, StoredIngestionSubmission>();
+  readonly ingestionAttempts: Array<{ id: string; submissionId: string; attempt: number; state: string; startedAt: string; completedAt: string; requestId: string }> = [];
 
   prepare(query: string): D1PreparedStatementLike {
     return new FakeD1Statement(this, query);

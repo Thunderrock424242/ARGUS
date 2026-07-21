@@ -177,6 +177,73 @@ export interface SourceReport {
   demoDataLabel: string;
 }
 
+export type IngestionSubmissionStatus =
+  | "needs-review"
+  | "duplicate"
+  | "approved"
+  | "rejected"
+  | "failed";
+
+export type IngestionMethod = "manual" | "collector" | "api" | "webhook";
+
+export interface IngestionProvenance {
+  method: IngestionMethod;
+  submittedById: string;
+  submittedByName: string;
+  sourceUrl: string;
+  attribution?: string;
+  notes?: string;
+  requestId: string;
+}
+
+/** A normalized, non-public intake record awaiting an explicit reviewer decision. */
+export interface IngestionSubmission {
+  id: string;
+  sourceId: string;
+  externalId?: string;
+  idempotencyKey: string;
+  contentHash: string;
+  url: string;
+  normalizedUrl: string;
+  title: string;
+  description?: string;
+  bodyText?: string;
+  author?: string;
+  language: string;
+  publishedAt: string;
+  latitude?: number;
+  longitude?: number;
+  countryCode?: string;
+  category?: EventCategory;
+  status: IngestionSubmissionStatus;
+  duplicateOfReportId?: string;
+  attempts: number;
+  lastError?: string;
+  nextRetryAt?: string;
+  submittedAt: string;
+  updatedAt: string;
+  reviewedAt?: string;
+  reviewedById?: string;
+  reviewedByName?: string;
+  reviewReason?: string;
+  provenance: IngestionProvenance;
+  dataClassification: DemoDataClassification;
+  demoDataLabel: string;
+  recordVersion: number;
+}
+
+export interface IngestionAttempt {
+  id: string;
+  submissionId: string;
+  attempt: number;
+  state: "accepted" | "failed" | "retried";
+  startedAt: string;
+  completedAt: string;
+  errorCode?: string;
+  errorMessage?: string;
+  requestId: string;
+}
+
 export type SourceType = "rss" | "atom" | "api" | "webhook" | "dataset";
 export type SourceStatus = "online" | "degraded" | "offline" | "paused" | "unknown";
 
@@ -369,6 +436,10 @@ export type AuditAction =
   | "watchlist-added"
   | "source-edited"
   | "collector-run"
+  | "ingestion-submitted"
+  | "ingestion-approved"
+  | "ingestion-rejected"
+  | "ingestion-retried"
   | "relationship-confirmed"
   | "relationship-rejected"
   | "relationship-disputed"
@@ -397,6 +468,7 @@ export interface AuditLogEntry {
     | "watchlist"
     | "brief"
     | "collector"
+    | "ingestion-submission"
     | "relationship"
     | "market-assessment"
     | "conflict"

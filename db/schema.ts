@@ -166,6 +166,84 @@ export const sourceReports = sqliteTable(
   ],
 );
 
+export const ingestionSubmissions = sqliteTable(
+  "ingestion_submissions",
+  {
+    id: text("id").primaryKey(),
+    sourceId: text("source_id").notNull(),
+    externalId: text("external_id"),
+    idempotencyKey: text("idempotency_key").notNull(),
+    contentHash: text("content_hash").notNull(),
+    url: text("url").notNull(),
+    normalizedUrl: text("normalized_url").notNull(),
+    title: text("title").notNull(),
+    description: text("description"),
+    bodyText: text("body_text"),
+    author: text("author"),
+    language: text("language").notNull().default("en"),
+    publishedAt: text("published_at").notNull(),
+    latitude: real("latitude"),
+    longitude: real("longitude"),
+    countryCode: text("country_code"),
+    category: text("category"),
+    status: text("status").notNull().default("needs-review"),
+    duplicateOfReportId: text("duplicate_of_report_id"),
+    attempts: integer("attempts").notNull().default(1),
+    lastError: text("last_error"),
+    nextRetryAt: text("next_retry_at"),
+    submittedAt: text("submitted_at").notNull(),
+    updatedAt: text("updated_at").notNull(),
+    reviewedAt: text("reviewed_at"),
+    reviewedById: text("reviewed_by_id"),
+    reviewedByName: text("reviewed_by_name"),
+    reviewReason: text("review_reason"),
+    provenance: text("provenance", { mode: "json" }).$type<Record<string, unknown>>().notNull(),
+    dataClassification: text("data_classification").notNull().default("demonstration"),
+    demoDataLabel: text("demo_data_label").notNull(),
+    version: integer("version").notNull().default(1),
+  },
+  (table) => [
+    uniqueIndex("ingestion_submissions_idempotency_unique").on(table.idempotencyKey),
+    uniqueIndex("ingestion_submissions_source_external_unique").on(table.sourceId, table.externalId),
+    index("ingestion_submissions_status_updated_idx").on(table.status, table.updatedAt),
+    index("ingestion_submissions_content_hash_idx").on(table.contentHash),
+    index("ingestion_submissions_source_idx").on(table.sourceId, table.submittedAt),
+    check(
+      "ingestion_submissions_status_check",
+      sql`${table.status} in ('needs-review', 'duplicate', 'approved', 'rejected', 'failed')`,
+    ),
+    check("ingestion_submissions_attempts_check", sql`${table.attempts} >= 1`),
+    check("ingestion_submissions_version_check", sql`${table.version} >= 1`),
+    check(
+      "ingestion_submissions_coordinates_check",
+      sql`(${table.latitude} is null and ${table.longitude} is null) or (${table.latitude} between -90 and 90 and ${table.longitude} between -180 and 180)`,
+    ),
+  ],
+);
+
+export const ingestionAttempts = sqliteTable(
+  "ingestion_attempts",
+  {
+    id: text("id").primaryKey(),
+    submissionId: text("submission_id")
+      .notNull()
+      .references(() => ingestionSubmissions.id, { onDelete: "cascade" }),
+    attempt: integer("attempt").notNull(),
+    state: text("state").notNull(),
+    startedAt: text("started_at").notNull(),
+    completedAt: text("completed_at").notNull(),
+    errorCode: text("error_code"),
+    errorMessage: text("error_message"),
+    requestId: text("request_id").notNull(),
+  },
+  (table) => [
+    uniqueIndex("ingestion_attempts_submission_attempt_unique").on(table.submissionId, table.attempt),
+    index("ingestion_attempts_state_time_idx").on(table.state, table.completedAt),
+    check("ingestion_attempts_attempt_check", sql`${table.attempt} >= 1`),
+    check("ingestion_attempts_state_check", sql`${table.state} in ('accepted', 'failed', 'retried')`),
+  ],
+);
+
 export const intelligenceEvents = sqliteTable(
   "intelligence_events",
   {
@@ -742,6 +820,8 @@ export const intelligenceReadModels = sqliteTable(
 
 export type IntelligenceSourceRow = typeof intelligenceSources.$inferSelect;
 export type SourceReportRow = typeof sourceReports.$inferSelect;
+export type IngestionSubmissionRow = typeof ingestionSubmissions.$inferSelect;
+export type IngestionAttemptRow = typeof ingestionAttempts.$inferSelect;
 export type IntelligenceEventRow = typeof intelligenceEvents.$inferSelect;
 export type IntelligenceClaimRow = typeof intelligenceClaims.$inferSelect;
 export type AnalystReviewRow = typeof analystReviews.$inferSelect;

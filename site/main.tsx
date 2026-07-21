@@ -30,6 +30,7 @@ const ReviewPage = lazy(() => import("@/app/review/page"));
 const RelationshipsPage = lazy(() => import("@/app/relationships/page"));
 const SettingsPage = lazy(() => import("@/app/settings/page"));
 const SourcesPage = lazy(() => import("@/app/sources/page"));
+const IngestionPage = lazy(() => import("@/app/ingestion/page"));
 const SystemPage = lazy(() => import("@/app/system/page"));
 const TimelinePage = lazy(() => import("@/app/timeline/page"));
 const WatchlistsPage = lazy(() => import("@/app/watchlists/page"));
@@ -50,6 +51,7 @@ const routeTitles: Record<string, string> = {
   "/briefs": "Intelligence Briefs",
   "/watchlists": "Watchlists",
   "/sources": "Sources",
+  "/ingestion": "Ingestion Queue",
   "/review": "Review Queue",
   "/aether": "Aether",
   "/system": "System Status",
@@ -103,6 +105,7 @@ function ArgusRoutes() {
             <Route path="/briefs/:slug" element={<BriefRoute />} />
             <Route path="/watchlists" element={<WatchlistsPage />} />
             <Route path="/sources" element={<SourcesPage />} />
+            <Route path="/ingestion" element={<IngestionPage />} />
             <Route path="/review" element={<ReviewPage />} />
             <Route path="/aether" element={<AetherPage />} />
             <Route path="/system" element={<SystemPage />} />

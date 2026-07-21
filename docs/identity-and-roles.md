@@ -22,9 +22,9 @@ Every OAuth identity receives `viewer`. Additional roles add explicit permission
 | Role | Permissions |
 | --- | --- |
 | `viewer` | Read its own identity profile |
-| `analyst` | Act on alerts and save personal monitoring layouts |
-| `reviewer` | Analyst permissions plus event and relationship review |
-| `source-manager` | Analyst permissions plus controlled dry-run collector execution |
+| `analyst` | Act on alerts, save personal monitoring layouts, and submit evidence to ingestion |
+| `reviewer` | Analyst permissions plus event, relationship, and ingestion review |
+| `source-manager` | Analyst permissions plus controlled dry-run collector execution and failed-ingestion retry |
 | `administrator` | Every permission, including role management, retention, and demonstration seeding |
 
 Roles are enforced in the Worker. Hiding or displaying a browser control is never treated as authorization. The last administrator role cannot be removed.
@@ -62,7 +62,7 @@ npm run brain:check
 npm run brain:deploy
 ```
 
-The list command should show only `0004_groovy_revanche.sql` and `0005_abnormal_giant_man.sql` as pending. If it shows an older migration, stop instead of confirming the apply command and inspect `d1_migrations` first. Migration `0004` creates `auth_users`, `auth_user_roles`, `auth_sessions`, and `auth_rate_limits`; `0005` keeps mutable GitHub logins non-authoritative while the numeric provider subject remains unique. Applying both before the Worker prevents identity requests from reaching code whose tables are not ready.
+On a database that was only baselined through `0003`, the list should show `0004_groovy_revanche.sql`, `0005_abnormal_giant_man.sql`, and `0006_brown_exiles.sql` as pending. On the current public database, only `0006_brown_exiles.sql` should remain after the identity migrations. If an older unexpected migration appears, stop instead of confirming and inspect `d1_migrations` first. Migration `0004` creates identity tables, `0005` keeps mutable GitHub logins non-authoritative, and `0006` creates the protected ingestion and attempt tables. Apply every pending migration before deploying Worker code that uses it.
 
 ### 4. Sign in and grant the first administrator
 

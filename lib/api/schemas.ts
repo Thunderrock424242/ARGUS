@@ -178,6 +178,47 @@ export const auditLogQuerySchema = z.object({
   targetId: routeIdentifierSchema.optional(),
 }).strict();
 
+export const ingestionQuerySchema = z.object({
+  page: pageSchema,
+  limit: z.coerce.number().int().min(1).max(100).default(25),
+  status: z.enum(["needs-review", "duplicate", "approved", "rejected", "failed"]).optional(),
+  sourceId: routeIdentifierSchema.optional(),
+}).strict();
+
+export const ingestionSubmissionSchema = z.object({
+  sourceId: routeIdentifierSchema,
+  externalId: z.string().trim().min(1).max(200).optional(),
+  idempotencyKey: z.string().trim().min(8).max(160).regex(/^[A-Za-z0-9._:-]+$/).optional(),
+  url: z.string().url().max(2_048),
+  title: z.string().trim().min(5).max(240),
+  description: z.string().trim().max(2_000).optional(),
+  bodyText: z.string().trim().max(20_000).optional(),
+  author: z.string().trim().max(160).optional(),
+  language: z.string().trim().regex(/^[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8})*$/).default("en"),
+  publishedAt: dateTime,
+  latitude: z.number().min(-90).max(90).optional(),
+  longitude: z.number().min(-180).max(180).optional(),
+  countryCode: z.string().trim().length(2).transform((value) => value.toUpperCase()).optional(),
+  category: z.enum(EVENT_CATEGORIES).optional(),
+  attribution: z.string().trim().max(500).optional(),
+  provenanceNotes: z.string().trim().max(2_000).optional(),
+}).strict().refine(
+  (input) => (input.latitude === undefined) === (input.longitude === undefined),
+  { message: "Latitude and longitude must be supplied together.", path: ["latitude"] },
+);
+
+export const ingestionReviewSchema = z.object({
+  decision: z.enum(["approve", "reject"]),
+  reason: z.string().trim().min(3).max(2_000),
+  expectedVersion: z.number().int().min(1),
+  eventId: routeIdentifierSchema.optional(),
+}).strict();
+
+export const ingestionRetrySchema = z.object({
+  reason: z.string().trim().min(3).max(2_000),
+  expectedVersion: z.number().int().min(1),
+}).strict();
+
 export const demoSeedRequestSchema = z.object({
   reviewerName: analystNameSchema.default("Deployment Operator"),
   confirmation: z.literal("seed-demonstration-data"),

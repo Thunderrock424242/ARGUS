@@ -6,6 +6,7 @@ export * from "./confidence";
 export * from "./correlation";
 export * from "./duplicate-detection";
 export * from "./impact-engine";
+export * from "./ingestion";
 export * from "./market-impact";
 export * from "./pipeline";
 export * from "./text";

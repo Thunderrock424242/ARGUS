@@ -15,6 +15,7 @@ ARGUS is organized around one central distinction: a **source report** is a sing
 | Alert policy | `packages/intelligence/alert-manager.ts` | Priority queue, deduplication, cooldowns, acknowledgement, and bounded history |
 | Provider boundary | `packages/database/provider.ts` and `d1-read-model-provider.ts` | Delegating read contract, immutable fallback, and versioned D1 implementation |
 | Durable operations | `packages/database/durable-operations.ts` | D1 event/relationship review, alert, layout, seed, retention, history, and audit batches |
+| Ingestion store | `packages/database/ingestion-store.ts` | Normalized intake, content hashing, idempotency, duplicate quarantine, review promotion, retry attempts, and audit batches |
 | Durable schema | `db/` and `drizzle/` | D1 tables, constraints, indexes, and migration |
 | Server policy | `lib/` | API validation, safe responses, admin auth, URL rules, rate limits, audit adapters |
 | Public brain | `worker/index.ts` | Standalone read/Aether routing, D1 selection, GitHub Pages CORS, protected administration, and scheduled retention |
@@ -22,6 +23,8 @@ ARGUS is organized around one central distinction: a **source report** is a sing
 The API depends on `IntelligenceDataProvider`, not on fixture arrays or Drizzle queries directly. Route modules hold a stable delegating provider reference; the Worker points it at D1 before dispatch when `DB` exists, otherwise it resets to immutable fixtures. A shared browser runtime provider hydrates events, reports, sources, relationships, histories, market data, and alerts from `/api/operations/snapshot`, then loads protected audit history for authorized reviewers. It keeps the bundled fallback when the Worker is unavailable.
 
 Mutable read models expose their D1 `recordVersion` as response metadata inside the typed document while stripping it before JSON persistence. Review, relationship, alert, and layout writes require the loaded revision when supplied and use conditional versioned updates so stale browser state returns `409`. Monitoring layouts are prefixed and filtered by the authenticated stable owner ID.
+
+Protected ingestion is a separate trust boundary. An Analyst or Source Manager may submit evidence, but the record remains in `ingestion_submissions`; only a Reviewer or Administrator can promote it into the public `reports` read model. The intake stores normalized provenance and a SHA-256 content hash, protects client retries with a hashed idempotency key, tracks attempts in `ingestion_attempts`, and uses the submission version to prevent duplicate reviewer decisions.
 
 ## Request flow
 
@@ -70,4 +73,4 @@ The collector runtime executes one persistent job and returns an explicit retry 
 
 ## Current versus planned
 
-Current screens and data remain a fictional demonstration. D1-backed reads, versioned documents, audited write batches, scheduled retention, identity/roles, globe mode, browser notifications, and Worker hydration are implemented. Event and relationship decisions can use the authenticated Worker path; several other screen controls remain browser-local while owner-aware persistence and hardened outbound transport are built.
+Current screens and data remain a fictional demonstration. D1-backed reads, versioned documents, audited write batches, scheduled retention, identity/roles, review-gated ingestion, globe mode, browser notifications, and Worker hydration are implemented. Live collector transport remains disabled while DNS-pinned outbound requests, strict parsers, queue scheduling, and source credentials are built.

@@ -43,7 +43,10 @@ describe("ARGUS identity and role controls", () => {
   it("keeps role capabilities explicit and administrator-only operations isolated", () => {
     expect(permissionsForRoles(["viewer"])).toEqual(["profile:read"]);
     expect(permissionsForRoles(["reviewer"])).toContain("events:review");
+    expect(permissionsForRoles(["reviewer"])).toContain("ingestion:review");
     expect(permissionsForRoles(["source-manager"])).toContain("collectors:run");
+    expect(permissionsForRoles(["source-manager"])).toContain("ingestion:retry");
+    expect(permissionsForRoles(["analyst"])).toContain("ingestion:submit");
     expect(permissionsForRoles(["source-manager"])).not.toContain("identity:manage");
     expect(permissionsForRoles(["administrator"])).toContain("identity:manage");
   });
