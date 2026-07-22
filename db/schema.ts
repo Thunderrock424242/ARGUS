@@ -793,6 +793,27 @@ export const monitoringLayouts = sqliteTable(
   (table) => [uniqueIndex("monitoring_layouts_owner_name_unique").on(table.ownerId, table.name)],
 );
 
+export const orbitalSourceSnapshots = sqliteTable(
+  "orbital_source_snapshots",
+  {
+    sourceId: text("source_id").primaryKey(),
+    status: text("status").notNull(),
+    payload: text("payload", { mode: "json" }).$type<Record<string, unknown>[]>().notNull(),
+    sourceVersion: text("source_version"),
+    sourceTimestamp: text("source_timestamp"),
+    recordCount: integer("record_count").notNull().default(0),
+    lastAttemptAt: text("last_attempt_at").notNull(),
+    lastSuccessfulAt: text("last_successful_at"),
+    nextRefreshAt: text("next_refresh_at").notNull(),
+    errorMessage: text("error_message"),
+    updatedAt: text("updated_at").notNull(),
+  },
+  (table) => [
+    index("orbital_source_snapshots_status_idx").on(table.status, table.nextRefreshAt),
+    check("orbital_source_snapshots_count_check", sql`${table.recordCount} >= 0`),
+  ],
+);
+
 /**
  * Materialized API documents used by the standalone Worker. The normalized
  * tables above remain available for filtering and joins, while this table lets
@@ -839,6 +860,7 @@ export type IntelligenceClaimRow = typeof intelligenceClaims.$inferSelect;
 export type AnalystReviewRow = typeof analystReviews.$inferSelect;
 export type AuditLogRow = typeof auditLogs.$inferSelect;
 export type CollectorRunRow = typeof collectorRuns.$inferSelect;
+export type OrbitalSourceSnapshotRow = typeof orbitalSourceSnapshots.$inferSelect;
 export type IntelligenceReadModelRow = typeof intelligenceReadModels.$inferSelect;
 export type AuthUserRow = typeof authUsers.$inferSelect;
 export type AuthUserRoleRow = typeof authUserRoles.$inferSelect;

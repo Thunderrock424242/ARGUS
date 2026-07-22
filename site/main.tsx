@@ -25,6 +25,7 @@ const ConflictsPage = lazy(() => import("@/app/conflicts/page"));
 const ConsequencesPage = lazy(() => import("@/app/consequences/page"));
 const DashboardPage = lazy(() => import("@/app/dashboard/page"));
 const GlobalMapPage = lazy(() => import("@/app/map/page"));
+const OrbitalWatchPage = lazy(() => import("@/app/orbit/page"));
 const LiveFeedsPage = lazy(() => import("@/app/live-feeds/page"));
 const NotFound = lazy(() => import("@/app/not-found"));
 const CommandCenterPage = lazy(() => import("@/app/page"));
@@ -42,6 +43,7 @@ const routeTitles: Record<string, string> = {
   "/": "Global Operations",
   "/dashboard": "Command Center",
   "/map": "Global Map",
+  "/orbit": "Orbital Watch",
   "/events": "Events",
   "/relationships": "Relationships & Impact",
   "/consequences": "Emerging Consequences",
@@ -98,6 +100,7 @@ function ArgusRoutes() {
             <Route path="/" element={<CommandCenterPage />} />
             <Route path="/dashboard" element={<DemoOnlyRoute feature="Command Center"><DashboardPage /></DemoOnlyRoute>} />
             <Route path="/map" element={<DemoOnlyRoute feature="Global Map"><GlobalMapPage /></DemoOnlyRoute>} />
+            <Route path="/orbit" element={<OrbitalWatchPage />} />
             <Route path="/events" element={<EventsPage />} />
             <Route path="/events/:slug" element={<EventRoute />} />
             <Route path="/relationships" element={<RelationshipsPage />} />

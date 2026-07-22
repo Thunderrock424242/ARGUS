@@ -1,6 +1,19 @@
-# Orbital Watch implementation design
+# Orbital Watch implementation guide
 
-> **Status: design only.** This document proposes a future ARGUS screen and data architecture. It does not enable live collection, add a route, change the database, or install a renderer.
+> **Status: bounded MVP implemented.** ARGUS now includes `/orbit`, a Three.js scene, SGP4 propagation from OMM records, a non-WebGL record table, server-side source adapters, durable per-source snapshots, and explicit fixture fallback. Live synchronization remains disabled by default and requires the deployment steps below; this is not a claim that the public deployment is collecting orbital data.
+
+## Implemented first release
+
+The first release deliberately implements a smaller subset of the full design:
+
+- Earth Orbit uses the bounded CelesTrak stations group, `satellite.js` SGP4 propagation, element-age warnings, and LEO/MEO/GEO/HEO classification.
+- Near Earth uses JPL Close-Approach API 1.5 and Sentry API 2.0 snapshots. It renders a compressed illustrative trajectory and preserves official probability, Torino, and Palermo fields without creating an ARGUS impact prediction.
+- Solar Activity uses NASA DONKI CME, flare, and geomagnetic-storm records over a bounded seven-day window.
+- The Cloudflare Worker is the only external-data caller. It uses fixed HTTPS destinations, refuses redirects, bounds response bytes and time, checks JPL response signatures, serializes the source loop, and stores the last successful payload per source in D1.
+- `GET /api/orbit` serves a combined snapshot. `POST /api/admin/orbit/sync` provides a permission-gated forced refresh, while the existing Worker cron performs due-only refreshes.
+- Migration `0009_serious_marvel_apes.sql` adds `orbital_source_snapshots`. `ORBITAL_LIVE_ENABLED` remains `false` in the committed Worker configuration.
+
+Horizons trajectory sampling, full satellite groups, ground tracks, conjunction data, decay alerts, NOAA warning products, URL-synchronized filters, and worker-thread propagation remain later phases. The current Near Earth and Solar scenes are visibly marked as compressed and illustrative.
 
 ## Product decision
 

@@ -12,12 +12,13 @@ ARGUS separates the interface from the runtime:
 Before deployment:
 
 1. Run lint, typecheck, unit tests, the Pages build, and `npm run brain:check`.
-2. Provision D1, apply every reviewed migration through `0008_whole_gateway.sql`, add its `DB` binding, and store the bootstrap and GitHub OAuth values with Wrangler secrets.
+2. Provision D1, apply every reviewed migration through `0009_serious_marvel_apes.sql`, add its `DB` binding, and store the bootstrap and GitHub OAuth values with Wrangler secrets.
 3. Deploy the Worker with `npm run brain:deploy`, seed demonstration read models through the protected endpoint, and record its `workers.dev` URL.
 4. Confirm the canonical Worker URL in `.github/workflows/deploy-pages.yml` and run the Pages workflow.
 5. Keep `COLLECTOR_PILOT_ENABLED=false` until source credentials, queries, terms, and the protected queue have been reviewed.
-6. Verify Worker CORS, the `X-ARGUS-Data-Store` header, globe/map tiles and attribution, `/api/health`, Aether fallback behavior, and demonstration labels.
-7. Confirm no `.env`, credential, raw private evidence, or production database export is in either artifact.
+6. Keep `ORBITAL_LIVE_ENABLED=false` until the CelesTrak, JPL, and NASA source policy has been reviewed. If DONKI is enabled, store `NASA_API_KEY` with `npx wrangler secret put NASA_API_KEY`; never add it to Pages or a `VITE_` variable.
+7. Verify Worker CORS, the `X-ARGUS-Data-Store` header, globe/map tiles and attribution, `/api/health`, `/api/orbit`, Aether fallback behavior, and demonstration labels.
+8. Confirm no `.env`, credential, raw private evidence, or production database export is in either artifact.
 
 GitHub Pages cannot execute REST handlers. The Worker imports the shared public handler functions directly, keeping validation and response behavior consistent without coupling the Vite site build to a server.
 
@@ -30,6 +31,7 @@ For production monitoring, deploy the collector scheduler/queue separately from 
 - The admin bearer token remains bootstrap/recovery access and must be rotated and kept out of ordinary browser use.
 - Protected-route and sign-in rate limits use D1 counters; higher-volume deployments should evaluate a Durable Object or gateway limiter.
 - The three-source official collector pilot is implemented but globally disabled by default. Live runs persist only protected ingestion submissions and durable run health; they never publish automatically.
+- Orbital Watch is implemented with fictional fallback and disabled-by-default live synchronization. Satellite markers are propagated from published element sets, Near Earth and Solar scenes use compressed illustrative scales, and the screen is not a collision-avoidance, navigation, or emergency-warning service.
 - Manual/API evidence intake is durable and review-gated. It does not fetch the submitted URL, and it remains explicitly demonstration-classified until the real-data release gate is satisfied.
 - Retention and collector crons are configured. Fixed official endpoints use hardened Worker fetch; custom-source DNS pinning, high-volume queues, and optional Guardian/X credentials remain deployment responsibilities.
 - RSS parsing is demonstration-grade and should be replaced by a hardened streaming parser.
@@ -56,15 +58,19 @@ GitHub OAuth with PKCE, stable analyst IDs, hashed D1 sessions, role checks, bro
 
 The D1 intake queue, strict validation, normalized provenance, SHA-256 hashing, idempotent inserts, canonical duplicate quarantine, versioned reviewer decisions, attempt history, audit records, authenticated browser console, three fixed official source adapters, bounded streaming transport, durable cron runs, retries/dead letters, and source health telemetry are implemented. The pilot starts disabled and never enables publication. Next, add cursor persistence, controlled egress for user-configurable sources, and a Cloudflare Queue or Workflow only when measured volume justifies it.
 
-### 4. Durable intelligence processing
+### 4. Orbital Watch — bounded MVP implemented
+
+The `/orbit` screen, SGP4 Earth-orbit rendering, accessible record table, CelesTrak/JPL/DONKI adapters, D1 last-known-good snapshots, due-only cron refresh, protected forced refresh, and source/version labels are implemented. Live synchronization remains disabled until migration `0009`, source review, and the optional NASA key are configured. Next, add cached serialized Horizons trajectories, worker-thread propagation for larger groups, ground tracks and passes, then consider conjunction or decay data only from an authorized source.
+
+### 5. Durable intelligence processing
 
 Persist stage audits, evidence links, confidence history, contradiction queues, and correlation explanations. Evaluate thresholds on a lawful labeled corpus before expanding categories.
 
-### 5. Retrieval and Aether provider
+### 6. Retrieval and Aether provider
 
 Build permission-scoped retrieval, structured output validation, citation reconciliation, model budgets, and a deterministic fallback. Treat generated analysis as a separate record type.
 
-### 6. Operational hardening
+### 7. Operational hardening
 
 Add backups, retention/deletion tools, dependency and secret scanning, abuse monitoring, accessibility tests, Playwright critical paths, load tests, disaster recovery, and privacy/ethical review.
 

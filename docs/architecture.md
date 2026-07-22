@@ -16,6 +16,8 @@ ARGUS is organized around one central distinction: a **source report** is a sing
 | Provider boundary | `packages/database/provider.ts` and `d1-read-model-provider.ts` | Delegating read contract, immutable fallback, and versioned D1 implementation |
 | Durable operations | `packages/database/durable-operations.ts` | D1 event/relationship review, alert, layout, seed, retention, history, and audit batches |
 | Ingestion store | `packages/database/ingestion-store.ts` | Normalized intake, content hashing, idempotency, duplicate quarantine, review promotion, retry attempts, and audit batches |
+| Orbital domain | `packages/orbital/` and `components/orbit/` | Fixed-source normalization, transport policy, SGP4 propagation, 3D scenes, and accessible record views |
+| Orbital snapshots | `packages/database/orbital-store.ts` | Due-only source synchronization, last-known-good D1 payloads, freshness status, and fixture fallback |
 | Durable schema | `db/` and `drizzle/` | D1 tables, constraints, indexes, and migration |
 | Server policy | `lib/` | API validation, safe responses, admin auth, URL rules, rate limits, audit adapters |
 | Public brain | `worker/index.ts` | Standalone read/Aether routing, D1 selection, GitHub Pages CORS, protected administration, and scheduled retention |
@@ -49,6 +51,8 @@ Public reads and deterministic `/api/aether` are `no-store`. Report lists delibe
 
 The browser starts from immutable demonstration records and can hydrate the Global Operations surface from the Worker. Protected event/relationship reviews, alert actions, monitoring layouts, read-model seeding, and retention are durable D1 operations. GitHub OAuth with PKCE establishes stable identities, and the Worker authorizes D1-backed sessions and roles without exposing a shared secret.
 
+Orbital Watch follows a separate source-snapshot path. The browser requests only `GET /api/orbit`; the Worker serially calls fixed CelesTrak, NASA/JPL, and NASA DONKI endpoints on their own refresh cadence, validates and normalizes the responses, and retains one last-known-good payload per source in D1. A protected `POST /api/admin/orbit/sync` route can force that same bounded loop. `NASA_API_KEY` remains a Worker secret. The renderer receives normalized public-information or unmistakably fictional records, never an upstream credential or unbounded raw payload.
+
 ## Collection and processing flow
 
 Production scheduling is intentionally outside the web request lifecycle:
@@ -73,4 +77,4 @@ The collector runtime executes one persistent job and returns an explicit retry 
 
 ## Current versus planned
 
-Current screens and data remain a fictional demonstration. D1-backed reads, versioned documents, audited write batches, scheduled retention, identity/roles, review-gated ingestion, globe mode, browser notifications, and Worker hydration are implemented. Live collector transport remains disabled while DNS-pinned outbound requests, strict parsers, queue scheduling, and source credentials are built.
+Most operational screens and data remain a fictional demonstration. D1-backed reads, versioned documents, audited write batches, scheduled retention, identity/roles, review-gated ingestion, globe mode, Orbital Watch, browser notifications, and Worker hydration are implemented. The official collector pilot and orbital source synchronization remain disabled by default; enabling either is a deployment decision with separate source, credential, and review requirements.

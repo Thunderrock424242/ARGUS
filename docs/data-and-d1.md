@@ -46,6 +46,7 @@ The schema includes:
 - watchlists and intelligence briefs
 - versioned materialized API documents used by the Worker
 - GitHub identities, roles, hashed sessions, and durable rate-limit counters
+- per-source orbital snapshots with last attempt, last success, source version, refresh time, and last-known-good normalized payload
 
 Fields used for filtering and relationships remain typed columns; richer evolving assessments use JSON. Checks constrain severity and confidence. Unique indexes protect source URLs, event slugs, and source/external-ID pairs. Foreign keys state intentional cascade or restrict behavior.
 

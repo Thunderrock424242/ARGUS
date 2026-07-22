@@ -23,6 +23,10 @@
 		"COLLECTOR_X_ENABLED": "false",
 		"COLLECTOR_GUARDIAN_QUERY": "world",
 		"COLLECTOR_X_QUERY": "(earthquake OR wildfire OR cyclone OR flood) lang:en -is:retweet",
+		"ORBITAL_LIVE_ENABLED": "false",
+		"ORBITAL_CELESTRAK_ENABLED": "true",
+		"ORBITAL_JPL_ENABLED": "true",
+		"ORBITAL_DONKI_ENABLED": "true",
 		"RETENTION_DAYS": "180"
 	},
 	"secrets": {
@@ -47,7 +51,7 @@
 	// After `wrangler d1 create argus-intelligence`, add the returned binding as
 	// `d1_databases: [{ "binding": "DB", "database_name": "argus-intelligence", "database_id": "..." }]`.
 	// Keep ARGUS_ADMIN_TOKEN, GITHUB_OAUTH_CLIENT_ID, GITHUB_OAUTH_CLIENT_SECRET,
-	// GUARDIAN_API_KEY, and X_BEARER_TOKEN in `wrangler secret`, never in this file.
-	// Guardian and X secrets are optional while their source flags or the global
-	// collector pilot flag are disabled.
+	// GUARDIAN_API_KEY, X_BEARER_TOKEN, and NASA_API_KEY in `wrangler secret`, never
+	// in this file. Source secrets are optional while their corresponding source
+	// flags or global feature flags are disabled.
 }

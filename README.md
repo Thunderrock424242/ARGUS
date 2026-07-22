@@ -12,6 +12,7 @@ The public demonstration is published at [thunderrock424242.github.io/ARGUS](htt
 
 - A dark, responsive command center, event explorer and dossiers
 - An immersive Global Operations View with switchable MapLibre 3D globe and flat-map modes, live report stream, layer controls, alerts, and event previews
+- An Orbital Watch with bounded Earth-orbit propagation, near-Earth approaches, Sentry monitoring context, solar events, source health, and a WebGL-independent table
 - An evidence-linked relationship graph, multi-step impact chains, deterministic consequence rules, and analyst review controls
 - Market-exposure assessments with separate anomaly, relationship, exposure, and causal-confidence scores
 - Conflict and regional profiles, stored-state timeline playback, Aether voice alerts, a controlled camera registry, and a configurable monitoring wall
@@ -26,7 +27,7 @@ The public demonstration is published at [thunderrock424242.github.io/ARGUS](htt
 
 ## Stack
 
-Vite and React 19 produce the static site for GitHub Pages. React Router handles browser-side routes, while a separate Cloudflare Worker hosts the API, optional D1 data, and Aether “brain.” TypeScript, Tailwind CSS, MapLibre GL, Recharts, Zod, Drizzle ORM, Vitest, and Playwright provide the application, data model, validation, and test layers.
+Vite and React 19 produce the static site for GitHub Pages. React Router handles browser-side routes, while a separate Cloudflare Worker hosts the API, optional D1 data, and Aether “brain.” TypeScript, Tailwind CSS, MapLibre GL, Three.js, satellite.js, Recharts, Zod, Drizzle ORM, Vitest, and Playwright provide the application, data model, validation, and test layers.
 
 ## Run locally
 
@@ -89,10 +90,11 @@ Event reviews, relationship reviews, ingestion decisions, confidence adjustments
 | GET | `/api/conflicts` | Conflict dossiers and country/regional profiles |
 | GET | `/api/operations` | Global Operations counts and latest alerts |
 | GET | `/api/operations/snapshot` | Hydration snapshot for the Global Operations View |
+| GET | `/api/orbit` | Source-qualified orbital, close-approach, Sentry, and space-weather snapshot |
 
 Identity endpoints include `GET /api/auth/config`, `POST /api/auth/exchange`, `GET /api/auth/session`, and `POST /api/auth/logout`. Protected Worker endpoints include event and relationship review, ingestion intake/list/review/retry, administrator confidence adjustment, collector status and controlled execution, alert and layout actions, demonstration seeding, retention, user listing, and role assignment.
 
-These endpoints run under `npm run brain:dev` and are hosted by the standalone Worker, not at the GitHub Pages origin. Protected reads also include `GET /api/admin/audit`, `GET /api/admin/layouts`, `GET /api/admin/ingestion`, and `GET /api/admin/collectors`; `POST /api/admin/collectors/run` performs an authorized dry-run or sends an active pilot source into protected intake. All API responses are `no-store`, carry a request ID, and redact credential-shaped fields. Unknown query and body fields are rejected. Administrative handlers require both explicit server configuration and authorization.
+These endpoints run under `npm run brain:dev` and are hosted by the standalone Worker, not at the GitHub Pages origin. Protected reads also include `GET /api/admin/audit`, `GET /api/admin/layouts`, `GET /api/admin/ingestion`, and `GET /api/admin/collectors`; `POST /api/admin/collectors/run` performs an authorized dry-run or sends an active pilot source into protected intake, and `POST /api/admin/orbit/sync` forces a bounded orbital refresh when live synchronization is enabled. All API responses are `no-store`, carry a request ID, and redact credential-shaped fields. Unknown query and body fields are rejected. Administrative handlers require both explicit server configuration and authorization.
 
 ## Documentation
 
@@ -104,7 +106,7 @@ These endpoints run under `npm run brain:dev` and are hosted by the standalone W
 - [Processing, correlation, and confidence](docs/intelligence-pipeline.md)
 - [Analyst review workflows](docs/analyst-workflows.md)
 - [Aether and map architecture](docs/aether-and-map.md)
-- [Orbital Watch implementation design](docs/orbital-awareness.md)
+- [Orbital Watch implementation guide](docs/orbital-awareness.md)
 - [Operations intelligence, impact, market, alerts, cameras, and playback](docs/operations-intelligence.md)
 - [Security and ethical OSINT](docs/security-and-ethics.md)
 - [Deployment, limitations, and roadmap](docs/deployment-and-roadmap.md)

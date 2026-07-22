@@ -7,6 +7,7 @@ import { demoBriefs, demoEvents } from "./packages/shared/demo-data";
 const staticRoutes = [
   "dashboard",
   "map",
+  "orbit",
   "events",
   "relationships",
   "consequences",

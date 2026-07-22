@@ -65,11 +65,23 @@ test("ingestion exposes a protected intake boundary", async ({ page }) => {
 });
 
 test("all primary analyst routes remain reachable", async ({ page }) => {
-  for (const route of ["/map", "/sources", "/ingestion", "/watchlists", "/briefs", "/aether", "/system", "/settings", "/relationships", "/consequences", "/conflicts", "/timeline", "/alerts", "/live-feeds", "/wall"]) {
+  for (const route of ["/map", "/orbit", "/sources", "/ingestion", "/watchlists", "/briefs", "/aether", "/system", "/settings", "/relationships", "/consequences", "/conflicts", "/timeline", "/alerts", "/live-feeds", "/wall"]) {
     const response = await gotoArgus(page, route);
     expect(response?.status(), route).toBe(200);
     await expect(page.getByText(/Demonstration data — not real-world intelligence/).first()).toBeVisible();
   }
+});
+
+test("orbital watch preserves source context outside the 3D canvas", async ({ page }) => {
+  await gotoArgus(page, "/orbit");
+  await expect(page.getByRole("heading", { name: "Orbital Watch" })).toBeVisible();
+  await expect(page.getByRole("button", { name: /Earth Orbit/ })).toBeVisible();
+  await expect(page.getByRole("button", { name: /Near Earth/ })).toBeVisible();
+  await expect(page.getByText("Accessible synchronized record table")).toBeVisible();
+  await expect(page.getByText(/not for navigation, conjunction assessment/i)).toBeVisible();
+  await page.getByRole("button", { name: /Near Earth/ }).click();
+  await page.getByRole("button", { name: /^Sentry ·/ }).first().click();
+  await expect(page.getByText(/Sentry listing is a probabilistic monitoring result/i)).toBeVisible();
 });
 
 test("impact graph exposes evidence and separate causal confidence", async ({ page }) => {

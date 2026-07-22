@@ -4,6 +4,7 @@ import { GET as getAuditLog } from "@/app/api/admin/audit/route";
 import { POST as seedDemoData } from "@/app/api/admin/demo-seed/route";
 import { POST as runCollector } from "@/app/api/admin/collectors/run/route";
 import { GET as getCollectors } from "@/app/api/admin/collectors/route";
+import { POST as syncOrbit } from "@/app/api/admin/orbit/sync/route";
 import { GET as getIngestion, POST as submitIngestion } from "@/app/api/admin/ingestion/route";
 import { POST as reviewIngestion } from "@/app/api/admin/ingestion/[id]/route";
 import { POST as adjustIngestionConfidence } from "@/app/api/admin/ingestion/[id]/confidence/route";
@@ -28,6 +29,7 @@ import { GET as getConflicts } from "@/app/api/conflicts/route";
 import { GET as getMarketImpacts } from "@/app/api/market-impacts/route";
 import { GET as getOperations } from "@/app/api/operations/route";
 import { GET as getOperationsSnapshot } from "@/app/api/operations/snapshot/route";
+import { GET as getOrbit } from "@/app/api/orbit/route";
 import { GET as getRelationships } from "@/app/api/relationships/route";
 import { GET as getReports } from "@/app/api/reports/route";
 import { GET as search } from "@/app/api/search/route";
@@ -35,6 +37,10 @@ import { GET as getSources } from "@/app/api/sources/route";
 import { jsonError, jsonResponse, requestIdFrom } from "@/lib/api/responses";
 import { enforceReadModelRetention } from "@/packages/database/durable-operations";
 import { runScheduledCollectorPilot } from "@/packages/database/collector-pilot";
+import {
+  runOrbitalSourceSync,
+  type OrbitalLiveConfiguration,
+} from "@/packages/database/orbital-store";
 import {
   D1IntelligenceDataProvider,
   type D1DocumentDatabase,
@@ -47,6 +53,7 @@ import {
   WorkerOfficialCollectorTransport,
   type CollectorPilotConfiguration,
 } from "@/packages/intelligence";
+import { WorkerOrbitalSourceTransport } from "@/packages/orbital/worker-source-transport";
 
 type WidenString<T> = T extends string ? string : T;
 type GeneratedBrainEnv = { [Key in keyof Env]?: WidenString<Env[Key]> };
@@ -97,6 +104,20 @@ function collectorTransport(env: BrainEnv): WorkerOfficialCollectorTransport {
     guardianApiKey: optionalStringBinding(env, "GUARDIAN_API_KEY"),
     xBearerToken: optionalStringBinding(env, "X_BEARER_TOKEN"),
   });
+}
+
+function orbitalConfiguration(env: BrainEnv): OrbitalLiveConfiguration {
+  return {
+    enabled: enabledFlag(optionalStringBinding(env, "ORBITAL_LIVE_ENABLED"), false),
+    celestrakEnabled: enabledFlag(optionalStringBinding(env, "ORBITAL_CELESTRAK_ENABLED"), true),
+    jplEnabled: enabledFlag(optionalStringBinding(env, "ORBITAL_JPL_ENABLED"), true),
+    donkiEnabled: enabledFlag(optionalStringBinding(env, "ORBITAL_DONKI_ENABLED"), true),
+    nasaApiKeyConfigured: Boolean(optionalStringBinding(env, "NASA_API_KEY")),
+  };
+}
+
+function orbitalTransport(env: BrainEnv): WorkerOrbitalSourceTransport {
+  return new WorkerOrbitalSourceTransport({ nasaApiKey: optionalStringBinding(env, "NASA_API_KEY") });
 }
 
 function withCors(
@@ -169,6 +190,8 @@ async function route(request: Request, env: BrainEnv): Promise<Response> {
     database: env.DB,
     collectorConfig: collectorConfiguration(env),
     collectorTransport: collectorTransport(env),
+    orbitalConfig: orbitalConfiguration(env),
+    orbitalTransport: orbitalTransport(env),
     demoDataEnabled: demoDataEnabled(env),
   };
   const identityContext = {
@@ -209,6 +232,9 @@ async function route(request: Request, env: BrainEnv): Promise<Response> {
   }
   if (request.method === "GET" && pathname === "/api/admin/collectors") {
     return getCollectors(request, adminContext);
+  }
+  if (request.method === "POST" && pathname === "/api/admin/orbit/sync") {
+    return syncOrbit(request, adminContext);
   }
   if (request.method === "GET" && pathname === "/api/admin/ingestion") {
     return getIngestion(request, adminContext);
@@ -302,6 +328,11 @@ async function route(request: Request, env: BrainEnv): Promise<Response> {
   else if (pathname === "/api/conflicts") response = await getConflicts(request);
   else if (pathname === "/api/operations") response = await getOperations(request);
   else if (pathname === "/api/operations/snapshot") response = await getOperationsSnapshot(request, { demoDataEnabled: demoDataEnabled(env) });
+  else if (pathname === "/api/orbit") response = await getOrbit(request, {
+    database: env.DB,
+    orbitalConfig: orbitalConfiguration(env),
+    demoDataEnabled: demoDataEnabled(env),
+  });
   else if (pathname === "/api/search") response = await search(request);
   else {
     const eventMatch = pathname.match(/^\/api\/events\/([^/]+)$/);
@@ -404,6 +435,32 @@ const worker = {
           throw error;
         }),
       );
+      const orbitalConfig = orbitalConfiguration(env);
+      if (orbitalConfig.enabled) {
+        tasks.push(
+          runOrbitalSourceSync(
+            env.DB,
+            orbitalConfig,
+            orbitalTransport(env),
+            new Date(controller.scheduledTime),
+          ).then((results) => {
+            console.log(JSON.stringify({
+              message: "orbital source schedule completed",
+              sources: results.map((result) => ({
+                sourceId: result.sourceId,
+                status: result.status,
+                recordCount: result.recordCount,
+              })),
+            }));
+          }).catch((error: unknown) => {
+            console.error(JSON.stringify({
+              message: "orbital source schedule failed",
+              error: error instanceof Error ? error.message : "Unknown orbital source error",
+            }));
+            throw error;
+          }),
+        );
+      }
     }
     if (tasks.length) context.waitUntil(Promise.all(tasks).then(() => undefined));
   },

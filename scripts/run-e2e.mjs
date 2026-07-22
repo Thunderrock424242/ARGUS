@@ -5,6 +5,11 @@ const host = "127.0.0.1";
 const port = process.env.ARGUS_E2E_PORT ?? "3100";
 const healthUrl = `http://${host}:${port}/`;
 const outputLimit = 16_384;
+const testEnvironment = {
+  ...process.env,
+  ARGUS_E2E_PORT: port,
+  VITE_ARGUS_DEMO_ENABLED: "true",
+};
 let serverOutput = "";
 
 const server = spawn(
@@ -19,7 +24,7 @@ const server = spawn(
   ],
   {
     cwd: process.cwd(),
-    env: { ...process.env, ARGUS_E2E_PORT: port },
+    env: testEnvironment,
     stdio: ["ignore", "pipe", "pipe"],
     windowsHide: true,
   },
@@ -81,7 +86,7 @@ try {
   );
   const tests = spawn(process.execPath, [playwrightCli, "test", ...process.argv.slice(2)], {
     cwd: process.cwd(),
-    env: { ...process.env, ARGUS_E2E_PORT: port },
+    env: testEnvironment,
     stdio: "inherit",
     windowsHide: true,
   });
