@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { Download, Pause, Pin, Play, Search } from "lucide-react";
 import Link from "@/components/navigation/link";
 import { StatusBadge, titleCase } from "@/components/domain/argus-ui";
+import { browserDemoDataEnabled } from "@/lib/config/demo-mode";
 import type { IntelligenceEvent, IntelligenceSource, SourceReport } from "@/packages/shared/types";
 
 type StreamDisposition = "new" | "duplicate" | "corroborating" | "contradictory" | "updating" | "rejected" | "awaiting-review";
@@ -57,7 +58,7 @@ export function LiveReportStream({ reports, sources, events, compact = false }: 
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement("a");
     anchor.href = url;
-    anchor.download = "argus-demonstration-report-stream.json";
+    anchor.download = browserDemoDataEnabled ? "argus-demonstration-report-stream.json" : "argus-public-report-stream.json";
     anchor.click();
     URL.revokeObjectURL(url);
   }
@@ -84,7 +85,7 @@ export function LiveReportStream({ reports, sources, events, compact = false }: 
           );
         })}
       </div>
-      <footer className="flex items-center justify-between border-t border-white/[.08] px-4 py-2 text-[9px] uppercase tracking-[.12em] text-slate-600"><span>{paused ? "Stream paused by analyst" : "Processing demonstration reports"}</span><span>{stream.length} visible · syndicated copies are not independent confirmation</span></footer>
+      <footer className="flex items-center justify-between border-t border-white/[.08] px-4 py-2 text-[9px] uppercase tracking-[.12em] text-slate-600"><span>{paused ? "Stream paused by analyst" : browserDemoDataEnabled ? "Processing demonstration reports" : "Processing public reports"}</span><span>{stream.length} visible · syndicated copies are not independent confirmation</span></footer>
     </section>
   );
 }
