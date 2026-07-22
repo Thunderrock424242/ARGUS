@@ -17,6 +17,8 @@
     "test:watch": "vitest",
     "test:e2e": "node scripts/run-e2e.mjs",
     "test:rendered": "npm run build && node --test tests/rendered-html.test.mjs",
+    "lighthouse": "npm run build -- --base=/ && lhci autorun",
+    "lighthouse:summary": "node scripts/summarize-lighthouse.mjs",
     "verify": "npm run lint && npm run typecheck && npm test && npm run build",
     "lint": "eslint . --ignore-pattern dist",
     "db:generate": "drizzle-kit generate"
@@ -36,6 +38,7 @@
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20260719.1",
     "@eslint/js": "9.39.4",
+    "@lhci/cli": "^0.15.1",
     "@playwright/test": "^1.61.1",
     "@tailwindcss/postcss": "4.2.1",
     "@testing-library/jest-dom": "^6.9.1",

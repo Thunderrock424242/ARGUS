@@ -48,9 +48,12 @@ npm run lint
 npm run typecheck
 npm test
 npm run build
+npm run lighthouse
 ```
 
-`npm run build` writes the deployable GitHub Pages site to `dist/`. Pushes to `main` publish that directory through `.github/workflows/deploy-pages.yml`.
+`npm run build` writes the deployable GitHub Pages site to `dist/`. `npm run lighthouse` builds a root-mounted local copy, audits Global Operations and the map three times, and writes local HTML/JSON reports to `lighthouse-results/`.
+
+The Lighthouse workflow runs for pull requests, pushes to `main`, and manual dispatches. Its job summary shows median category and loading scores, and its report artifact is retained for 30 days. Publishing is intentionally separate: run **Deploy GitHub Pages** manually from the repository's Actions tab when the current `main` branch is ready to go live.
 
 ## Free hosting split
 

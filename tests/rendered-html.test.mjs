@@ -50,6 +50,8 @@ test("keeps the ARGUS shell and analyst routes in production source", async () =
   assert.match(operationsMap, /projection:\s*\{\s*type:\s*"globe"/);
   assert.match(operationsMap, /Switch to.*flat map.*3D globe/s);
   assert.match(operationsView, /api\/operations\/snapshot/);
+  assert.match(operationsView, /aria-label="Map intelligence summary"/);
+  assert.doesNotMatch(operationsView, /pointer-events-none absolute left-3 top-3 z-20 flex flex-wrap gap-2/);
   assert.match(alertCenter, /new Notification/);
   assert.match(worker, /D1IntelligenceDataProvider/);
 

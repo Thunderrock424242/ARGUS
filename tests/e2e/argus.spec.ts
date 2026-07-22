@@ -13,6 +13,12 @@ test("global operations exposes the live operating picture and demonstration war
   await expect(page.getByRole("heading", { name: "Operational layers" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Alert queue" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Report stream" })).toBeVisible();
+
+  const summaryBox = await page.getByLabel("Map intelligence summary").boundingBox();
+  const mapFilterBox = await page.getByLabel("Filter map by category").boundingBox();
+  expect(summaryBox).not.toBeNull();
+  expect(mapFilterBox).not.toBeNull();
+  expect(summaryBox!.y + summaryBox!.height).toBeLessThanOrEqual(mapFilterBox!.y);
 });
 
 test("the original command center remains available", async ({ page }) => {
